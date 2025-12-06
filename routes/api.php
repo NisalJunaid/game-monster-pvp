@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BattleController;
+use App\Http\Controllers\EncounterController;
+use App\Http\Controllers\LocationController;
 use App\Http\Controllers\MonsterController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,4 +19,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/battles/challenge', [BattleController::class, 'challenge']);
     Route::post('/battles/{battle}/act', [BattleController::class, 'act']);
     Route::get('/battles/{battle}', [BattleController::class, 'show']);
+
+    Route::post('/location/update', [LocationController::class, 'update']);
+    Route::get('/encounters/current', [EncounterController::class, 'current']);
+    Route::post('/encounters/{ticket}/resolve-capture', [EncounterController::class, 'resolveCapture']);
 });
