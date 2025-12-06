@@ -9,7 +9,7 @@
                 <p class="text-gray-600">Update your location to discover nearby monsters.</p>
             </div>
         </div>
-        <form method="POST" action="{{ route('encounters.update') }}" class="grid md:grid-cols-3 gap-4 items-end">
+        <form method="POST" action="{{ route('encounters.update') }}" class="grid md:grid-cols-3 gap-4 items-end" id="location-form">
             @csrf
             <div>
                 <label class="block text-sm font-medium text-gray-700">Latitude</label>
@@ -31,18 +31,32 @@
                 <button type="button" id="use-location" class="px-3 py-2 bg-gray-200 rounded border">Use Browser Location</button>
                 <button class="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-500">Update Location</button>
             </div>
+            <input type="hidden" name="recorded_at" id="recorded_at" value="{{ old('recorded_at') }}">
         </form>
         <script>
+            const latField = document.getElementById('lat');
+            const lngField = document.getElementById('lng');
+            const accuracyField = document.getElementById('accuracy');
+            const recordedAtField = document.getElementById('recorded_at');
+            const form = document.getElementById('location-form');
+
             document.getElementById('use-location')?.addEventListener('click', () => {
                 if (!navigator.geolocation) {
                     alert('Geolocation is not supported in this browser.');
                     return;
                 }
                 navigator.geolocation.getCurrentPosition((position) => {
-                    document.getElementById('lat').value = position.coords.latitude;
-                    document.getElementById('lng').value = position.coords.longitude;
-                    document.getElementById('accuracy').value = position.coords.accuracy;
+                    latField.value = position.coords.latitude;
+                    lngField.value = position.coords.longitude;
+                    accuracyField.value = position.coords.accuracy ?? accuracyField.value ?? 10;
+                    recordedAtField.value = new Date(position.timestamp || Date.now()).toISOString();
                 }, () => alert('Unable to retrieve location.'));
+            });
+
+            form?.addEventListener('submit', () => {
+                if (!recordedAtField.value) {
+                    recordedAtField.value = new Date().toISOString();
+                }
             });
         </script>
     </div>

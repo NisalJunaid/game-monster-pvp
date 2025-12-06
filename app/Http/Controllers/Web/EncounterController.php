@@ -71,18 +71,24 @@ class EncounterController extends Controller
             return back()->withErrors($exception->errors())->withInput();
         }
 
-        PlayerLocation::updateOrCreate(
-            ['user_id' => $user->id],
-            [
-                'lat' => $data['lat'],
-                'lng' => $data['lng'],
-                'accuracy_m' => $data['accuracy_m'],
-                'speed_mps' => $data['speed_mps'] ?? null,
-                'recorded_at' => $recordedAt,
-            ],
-        );
+        try {
+            PlayerLocation::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'lat' => $data['lat'],
+                    'lng' => $data['lng'],
+                    'accuracy_m' => $data['accuracy_m'],
+                    'speed_mps' => $data['speed_mps'] ?? null,
+                    'recorded_at' => $recordedAt,
+                ],
+            );
 
-        $ticket = $this->encounterService->issueTicket($user, $data['lat'], $data['lng']);
+            $ticket = $this->encounterService->issueTicket($user, $data['lat'], $data['lng']);
+        } catch (\Throwable $exception) {
+            return back()->withErrors([
+                'location' => $exception->getMessage() ?: 'Unable to update location right now.',
+            ])->withInput();
+        }
         $message = $ticket ? 'Location updated. Encounter available!' : 'Location updated. No encounters nearby yet.';
 
         return redirect()->route('encounters.index')->with('status', $message);
