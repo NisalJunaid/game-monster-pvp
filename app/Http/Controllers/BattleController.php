@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Battle\BattleEngine;
+use App\Domain\Pvp\PvpRankingService;
 use App\Http\Requests\BattleActionRequest;
 use App\Http\Requests\ChallengeBattleRequest;
 use App\Models\Battle;
@@ -15,7 +16,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class BattleController extends Controller
 {
-    public function __construct(private readonly BattleEngine $engine)
+    public function __construct(private readonly BattleEngine $engine, private readonly PvpRankingService $rankingService)
     {
     }
 
@@ -88,6 +89,10 @@ class BattleController extends Controller
             'action_json' => $request->validated(),
             'result_json' => $result,
         ]);
+
+        if ($hasEnded && $winnerId !== null) {
+            $this->rankingService->handleBattleCompletion($battle->fresh());
+        }
 
         return response()->json([
             'data' => $this->serializeBattle($battle->fresh(['turns'])),
