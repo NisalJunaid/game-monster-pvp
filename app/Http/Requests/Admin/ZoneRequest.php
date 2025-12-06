@@ -20,6 +20,10 @@ class ZoneRequest extends FormRequest
                 $this->merge(['shape' => $decoded]);
             }
         }
+
+        $this->merge([
+            'spawn_types' => array_filter((array) $this->input('spawn_types', [])),
+        ]);
     }
 
     public function rules(): array
@@ -30,6 +34,9 @@ class ZoneRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
             'shape_type' => ['required', 'in:polygon,circle'],
             'rules_json' => ['nullable', 'array'],
+            'spawn_strategy' => ['nullable', 'in:manual,type_weighted,rarity_weighted'],
+            'spawn_types' => ['array'],
+            'spawn_types.*' => ['integer', 'exists:types,id'],
             'shape.path' => ['required_if:shape_type,polygon', 'array', 'min:3'],
             'shape.path.*.lat' => ['required_with:shape.path', 'numeric'],
             'shape.path.*.lng' => ['required_with:shape.path', 'numeric'],
