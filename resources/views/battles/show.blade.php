@@ -12,7 +12,7 @@
     $isYourTurn = ($state['next_actor_id'] ?? null) === $userId && $battle->status === 'active';
 @endphp
 
-<div class="space-y-5">
+<div class="space-y-5" data-battle-live data-battle-id="{{ $battle->id }}" data-refresh-url="{{ route('battles.show', $battle) }}">
     <div class="bg-white shadow rounded-xl p-6">
         <div class="flex items-center justify-between">
             <div>
@@ -26,6 +26,7 @@
             <div class="text-right text-sm text-gray-600">
                 <p>Next actor: {{ $state['next_actor_id'] ?? 'Unknown' }}</p>
                 <p>Mode: {{ ucfirst($state['mode'] ?? 'ranked') }}</p>
+                <p class="text-xs text-gray-500" data-battle-live-status>Connecting to live battle feed...</p>
             </div>
         </div>
     </div>

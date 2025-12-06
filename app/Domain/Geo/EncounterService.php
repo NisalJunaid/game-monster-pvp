@@ -2,6 +2,7 @@
 
 namespace App\Domain\Geo;
 
+use App\Domain\Encounters\ZoneSpawnGenerator;
 use App\Models\EncounterTicket;
 use App\Models\MonsterSpecies;
 use App\Models\SecurityEvent;
@@ -20,7 +21,11 @@ class EncounterService
     private const ENCOUNTER_LIMIT = 3;
     private const ENCOUNTER_WINDOW_SECONDS = 60;
 
-    public function __construct(private GeoZoneService $geoZoneService, private RedisRateLimiter $rateLimiter)
+    public function __construct(
+        private GeoZoneService $geoZoneService,
+        private RedisRateLimiter $rateLimiter,
+        private ZoneSpawnGenerator $spawnGenerator,
+    )
     {
     }
 
@@ -64,6 +69,10 @@ class EncounterService
         }
 
         $spawnEntries = $zone->spawnEntries()->with('species')->get();
+
+        if ($spawnEntries->isEmpty() && $zone->spawn_strategy !== 'manual') {
+            $spawnEntries = $this->spawnGenerator->generateFromZone($zone)->load('species');
+        }
 
         if ($spawnEntries->isEmpty()) {
             return null;

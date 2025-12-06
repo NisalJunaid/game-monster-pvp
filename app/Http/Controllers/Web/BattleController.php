@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Domain\Battle\BattleEngine;
 use App\Domain\Pvp\PvpRankingService;
+use App\Events\BattleUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BattleActionRequest;
 use App\Models\Battle;
@@ -69,6 +70,14 @@ class BattleController extends Controller
         if ($hasEnded && $winnerId !== null) {
             $this->rankingService->handleBattleCompletion($battle->fresh());
         }
+
+        broadcast(new BattleUpdated(
+            battleId: $battle->id,
+            state: $state,
+            status: $hasEnded ? 'completed' : 'active',
+            nextActorId: $state['next_actor_id'] ?? null,
+            winnerUserId: $winnerId,
+        ));
 
         return redirect()->route('battles.show', $battle)->with('status', 'Action submitted.');
     }

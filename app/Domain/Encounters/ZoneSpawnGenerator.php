@@ -9,6 +9,14 @@ use Illuminate\Support\Facades\DB;
 
 class ZoneSpawnGenerator
 {
+    private const DEFAULT_RULES = [
+        'num_species' => 8,
+        'level_min' => 1,
+        'level_max' => 8,
+        'weight_min' => 10,
+        'weight_max' => 100,
+    ];
+
     public function generate(Zone $zone, array $rules, bool $replaceExisting = true): Collection
     {
         $poolMode = $rules['pool_mode'] ?? 'any';
@@ -68,6 +76,22 @@ class ZoneSpawnGenerator
 
             return $zone->spawnEntries()->with('species')->get();
         });
+    }
+
+    public function generateFromZone(Zone $zone, bool $replaceExisting = true): Collection
+    {
+        $rules = array_merge(self::DEFAULT_RULES, $zone->spawn_rules ?? []);
+        $rules['pool_mode'] = match ($zone->spawn_strategy) {
+            'type_weighted' => 'type_based',
+            'rarity_weighted' => 'rarity_based',
+            default => 'any',
+        };
+
+        if (($rules['pool_mode'] ?? 'any') === 'type_based' && empty($rules['types'])) {
+            $rules['pool_mode'] = 'any';
+        }
+
+        return $this->generate($zone, $rules, $replaceExisting);
     }
 
     private function normalizeWeights(array $weights): array

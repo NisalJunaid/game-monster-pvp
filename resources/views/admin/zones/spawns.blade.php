@@ -23,6 +23,7 @@
                 <p><strong>Spawn strategy:</strong> {{ ucfirst($zone->spawn_strategy ?? 'manual') }}</p>
                 @php($preferredTypes = collect($zone->spawn_rules['types'] ?? []))
                 <p><strong>Preferred types:</strong> {{ $preferredTypes->isEmpty() ? 'None selected' : $types->whereIn('id', $preferredTypes)->pluck('name')->join(', ') }}</p>
+                <p class="text-xs text-gray-500">Non-manual zones auto-generate spawn tables after each save so encounters always have monsters available.</p>
             </div>
         </div>
 

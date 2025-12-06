@@ -1,66 +1,86 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Monster PvP Platform
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This project is a Laravel 10 application for a Pokémon-inspired monster tamer with deterministic PvP battles, live ladder matchmaking, admin-defined encounter zones, and Vite-powered UI assets.
 
-## About Laravel
+## Tech stack
+- PHP 8.1+ with Laravel 10
+- PostgreSQL + PostGIS and Redis
+- Vite, Laravel Echo, and Pusher-compatible websockets for real-time features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Live ranked ladder + socket setup
+Follow these steps to bring up the live matchmaking flow that the latest change introduced:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+1. **Install PHP/JS deps (including the Pusher server SDK)**
+   ```bash
+   composer install
+   composer require pusher/pusher-php-server
+   npm ci
+   ```
+   The backend emits `PvpMatchFound` and `PvpSearchStatus` events that use the Pusher driver to reach a private `users.{id}` channel for each player. Frontend listeners live in `resources/js/modules/pvp.js` and are bootstrapped via `resources/js/app.js`.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+2. **Set environment for websockets** (use matching values for both Laravel and Vite):
+   ```env
+   BROADCAST_DRIVER=pusher
+   QUEUE_CONNECTION=redis       # or "sync" for local-only testing
 
-## Learning Laravel
+   PUSHER_APP_ID=monster-local
+   PUSHER_APP_KEY=localkey
+   PUSHER_APP_SECRET=localsecret
+   PUSHER_HOST=127.0.0.1
+   PUSHER_PORT=6001
+   PUSHER_SCHEME=http
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+   VITE_PUSHER_APP_KEY=${PUSHER_APP_KEY}
+   VITE_PUSHER_APP_CLUSTER=mt1
+   VITE_PUSHER_HOST=${PUSHER_HOST}
+   VITE_PUSHER_PORT=${PUSHER_PORT}
+   VITE_PUSHER_SCHEME=${PUSHER_SCHEME}
+   ```
+   These map directly to the Echo bootstrap in `resources/js/bootstrap.js`, which connects via ws/wss using the above host/port/scheme. Set `APP_URL` to the domain you’ll hit from the browser so Echo auth works.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+3. **Run database setup** so the matchmaking queue and battle tables exist:
+   ```bash
+   php artisan migrate
+   ```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+4. **Start a websockets server** that speaks the Pusher protocol on your droplet:
+   - **Laravel WebSockets / Reverb (self-contained on the app host)**: install the package of your choice, then run it bound to `0.0.0.0` and the same `PUSHER_PORT` you configured above. Example with Laravel WebSockets:
+     ```bash
+     composer require beyondcode/laravel-websockets
+     php artisan websockets:serve --host=0.0.0.0 --port=6001
+     ```
+   - **Soketi (standalone server)**: run the Docker image alongside the app:
+     ```bash
+     docker run -it --rm -p 6001:6001 \
+       -e DEBUG=1 -e DEFAULT_APP_ID=monster-local \
+       -e DEFAULT_APP_KEY=localkey -e DEFAULT_APP_SECRET=localsecret \
+       quay.io/soketi/soketi:1.0-16-alpine
+     ```
+   - **Laravel Echo Server** remains an option if you already have it installed globally:
+     ```bash
+     laravel-echo-server init   # set host 0.0.0.0, port 6001, app id/key/secret from .env
+     laravel-echo-server start
+     ```
+   Any of the above will satisfy both the ranked ladder lobby events and the new live battle turn updates (`BattleUpdated`).
 
-## Laravel Sponsors
+5. **Run the app + queues + Vite**:
+   ```bash
+   php artisan serve
+   # In another shell (unless QUEUE_CONNECTION=sync)
+   php artisan queue:work
+   # For client assets
+   npm run dev    # or `npm run build` for production
+   ```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+6. **Verify matchmaking + battles**: log in as two users, open `/pvp`, press a queue mode, and watch the status cards update. When the backend pairs two `MatchmakingQueue` entries, it creates a `Battle` via `LiveMatchmaker` and broadcasts to both players; the JS handler redirects to the battle URL immediately. Once in `/battles/{id}`, both clients stay in sync via the `BattleUpdated` event and reload automatically when an action resolves. If the search timer expires with no pairing, the client leaves the queue and prompts the user to try again.
 
-### Premium Partners
+## Battle and encounter notes
+- Battles are initialized through `BattleEngine`, pulling up to three strongest monsters per player; if a player lacks monsters, the frontend exposes a fallback punch/kick move set in the Pokémon-inspired battle UI. The battle page now listens for websocket updates and refreshes automatically when turns complete.
+- Admins can draw zones and configure spawn types via `/admin/zones/*` to control random encounter generation. Zones saved with a non-`manual` spawn strategy now auto-seed their spawn tables using the preferred types so encounters have monsters to choose from immediately.
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+## Development scripts
+- `npm run dev` – Vite dev server for JS/CSS
+- `npm run build` – production asset build
 
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Licensing
+This codebase started from Laravel’s MIT-licensed skeleton.
