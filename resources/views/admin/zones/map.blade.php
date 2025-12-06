@@ -46,6 +46,25 @@
                     <input type="number" id="priority" name="priority" value="0">
                 </div>
 
+                <div class="field">
+                    <label for="spawn_strategy">Spawn strategy</label>
+                    <select id="spawn_strategy" name="spawn_strategy" class="w-full border rounded px-2 py-1">
+                        <option value="manual">Manual (use spawn table only)</option>
+                        <option value="type_weighted">Type-weighted</option>
+                        <option value="rarity_weighted">Rarity-weighted</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="spawn_types">Preferred monster types</label>
+                    <select id="spawn_types" name="spawn_types[]" multiple class="w-full border rounded px-2 py-1 h-32">
+                        @foreach($types as $type)
+                            <option value="{{ $type->id }}">{{ $type->name }}</option>
+                        @endforeach
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Zones can bias random spawn generators toward the selected types.</p>
+                </div>
+
                 <div class="field actions">
                     <input type="checkbox" id="is_active" name="is_active" value="1" checked>
                     <label for="is_active">Active</label>
@@ -72,6 +91,7 @@
 <script>
     const zones = @json($zones);
     const storeUrl = @json(route('admin.zones.store'));
+    const typeNamesById = @json($types->mapWithKeys(fn($type) => [$type->id => $type->name]));
 
     let map;
     let drawingManager;
@@ -210,6 +230,8 @@
         document.getElementById('priority').value = zone.priority;
         document.getElementById('is_active').checked = zone.is_active;
         document.getElementById('shape_type').value = zone.shape_type;
+        document.getElementById('spawn_strategy').value = zone.spawn_strategy || 'manual';
+        setSpawnTypes(zone.spawn_rules?.types || []);
 
         form.action = @json(url('/admin/zones')) + '/' + zone.id;
         document.getElementById('zone-form-method').value = 'PUT';
@@ -227,6 +249,7 @@
         document.getElementById('zone-form-method').value = 'POST';
         document.getElementById('shape_type').value = 'polygon';
         document.getElementById('shape_json').value = '';
+        setSpawnTypes([]);
         activeZoneId = null;
         if (drawnOverlay) {
             drawnOverlay.setMap(null);
@@ -240,9 +263,23 @@
         container.innerHTML = '';
         zones.forEach((zone) => {
             const button = document.createElement('button');
-            button.textContent = `${zone.name} (priority ${zone.priority})`;
+            const typeSummary = (zone.spawn_rules?.types || [])
+                .map((id) => typeNamesById[id] || id)
+                .join(', ');
+            button.textContent = `${zone.name} (priority ${zone.priority})${typeSummary ? ' • '+typeSummary : ''}`;
             button.addEventListener('click', () => populateForm(zone));
             container.appendChild(button);
+        });
+    }
+
+    function setSpawnTypes(types) {
+        const select = document.getElementById('spawn_types');
+        if (! select) {
+            return;
+        }
+
+        Array.from(select.options).forEach((option) => {
+            option.selected = types.includes(Number(option.value));
         });
     }
 

@@ -121,10 +121,75 @@ class BattleEngine
 
     private function buildParticipant(User $user, Collection $party): array
     {
+        $monsters = $party->values()->map(fn (MonsterInstance $instance) => $this->monsterState($instance));
+
+        if ($monsters->isEmpty()) {
+            $monsters->push($this->fallbackBrawler());
+        }
+
         return [
             'user_id' => $user->id,
             'active_index' => 0,
-            'monsters' => $party->values()->map(fn (MonsterInstance $instance) => $this->monsterState($instance))->all(),
+            'monsters' => $monsters->all(),
+        ];
+    }
+
+    private function fallbackBrawler(): array
+    {
+        return [
+            'id' => 0,
+            'level' => 5,
+            'name' => 'Street Brawler',
+            'types' => [],
+            'type_names' => ['Physical'],
+            'stats' => [
+                'hp' => 50,
+                'attack' => 40,
+                'defense' => 35,
+                'sp_attack' => 30,
+                'sp_defense' => 30,
+                'speed' => 35,
+            ],
+            'max_hp' => 50,
+            'current_hp' => 50,
+            'status' => null,
+            'moves' => $this->fallbackMoves(),
+        ];
+    }
+
+    private function fallbackMoves(): array
+    {
+        return [
+            [
+                'id' => 0,
+                'slot' => 1,
+                'name' => 'Quick Jab',
+                'type_id' => 0,
+                'type' => 'Neutral',
+                'category' => 'physical',
+                'power' => 35,
+                'effect' => [],
+            ],
+            [
+                'id' => 0,
+                'slot' => 2,
+                'name' => 'Spinning Kick',
+                'type_id' => 0,
+                'type' => 'Neutral',
+                'category' => 'physical',
+                'power' => 45,
+                'effect' => [],
+            ],
+            [
+                'id' => 0,
+                'slot' => 3,
+                'name' => 'Feint Uppercut',
+                'type_id' => 0,
+                'type' => 'Neutral',
+                'category' => 'physical',
+                'power' => 40,
+                'effect' => ['status' => 'shock'],
+            ],
         ];
     }
 

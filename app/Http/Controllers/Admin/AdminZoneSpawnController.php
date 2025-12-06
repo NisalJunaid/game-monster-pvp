@@ -63,6 +63,12 @@ class AdminZoneSpawnController extends Controller
         $rules = $request->validated();
         $replace = $request->boolean('replace_existing', true);
 
+        $zoneTypes = $zone->spawn_rules['types'] ?? [];
+        if (empty($rules['types']) && ! empty($zoneTypes)) {
+            $rules['types'] = $zoneTypes;
+            $rules['pool_mode'] = $rules['pool_mode'] === 'any' ? 'type_based' : $rules['pool_mode'];
+        }
+
         $generated = $this->generator->generate($zone, $rules, $replace);
 
         $message = $generated->isEmpty()
