@@ -9,10 +9,11 @@ use App\Http\Requests\LocationUpdateRequest;
 use App\Models\EncounterTicket;
 use App\Models\PlayerLocation;
 use App\Support\RedisRateLimiter;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Support\Carbon\Carbon;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class EncounterController extends Controller
@@ -39,9 +40,10 @@ class EncounterController extends Controller
         ]);
     }
 
-    public function update(LocationUpdateRequest $request): RedirectResponse
+    public function update(LocationUpdateRequest $request): JsonResponse|RedirectResponse
     {
         $user = $request->user();
+        $expectsJson = $request->expectsJson();
 
         try {
             $this->rateLimiter->ensureWithinLimit(
@@ -51,7 +53,13 @@ class EncounterController extends Controller
                 'Too many location updates; please slow down.',
             );
         } catch (HttpResponseException $exception) {
-            return back()->withErrors(['location' => $exception->getResponse()->getData()->message ?? 'Rate limit hit.']);
+            $message = $exception->getResponse()->getData()->message ?? 'Rate limit hit.';
+
+            if ($expectsJson) {
+                return response()->json(['message' => $message], 429);
+            }
+
+            return back()->withErrors(['location' => $message]);
         }
 
         $data = $request->validated();
@@ -68,6 +76,10 @@ class EncounterController extends Controller
                 $recordedAt,
             );
         } catch (ValidationException $exception) {
+            if ($expectsJson) {
+                return response()->json(['errors' => $exception->errors()], 422);
+            }
+
             return back()->withErrors($exception->errors())->withInput();
         }
 
@@ -85,11 +97,24 @@ class EncounterController extends Controller
 
             $ticket = $this->encounterService->issueTicket($user, $data['lat'], $data['lng']);
         } catch (\Throwable $exception) {
+            if ($expectsJson) {
+                return response()->json([
+                    'message' => $exception->getMessage() ?: 'Unable to update location right now.',
+                ], 500);
+            }
+
             return back()->withErrors([
                 'location' => $exception->getMessage() ?: 'Unable to update location right now.',
             ])->withInput();
         }
         $message = $ticket ? 'Location updated. Encounter available!' : 'Location updated. No encounters nearby yet.';
+
+        if ($expectsJson) {
+            return response()->json([
+                'message' => $message,
+                'encounter' => $ticket?->load(['species', 'zone']),
+            ]);
+        }
 
         return redirect()->route('encounters.index')->with('status', $message);
     }

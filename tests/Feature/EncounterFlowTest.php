@@ -2,14 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Events\EncounterIssued;
 use App\Models\EncounterTicket;
 use App\Models\MonsterSpecies;
 use App\Models\User;
 use App\Models\Zone;
 use App\Models\ZoneSpawnEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon\Carbon;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class EncounterFlowTest extends TestCase
@@ -270,5 +272,42 @@ class EncounterFlowTest extends TestCase
             'id' => $ticket['id'],
             'status' => EncounterTicket::STATUS_ACTIVE,
         ]);
+    }
+
+    public function test_spawn_rules_seed_encounter_when_entries_empty(): void
+    {
+        Event::fake([EncounterIssued::class]);
+
+        $user = User::factory()->create();
+        $token = $user->createToken('test')->plainTextToken;
+        MonsterSpecies::factory()->count(2)->create();
+
+        $zone = Zone::create([
+            'name' => 'Rule Zone',
+            'priority' => 1,
+            'is_active' => true,
+            'shape_type' => 'circle',
+            'center' => 'POINT(0 0)',
+            'radius_m' => 2000,
+            'min_lat' => -1,
+            'max_lat' => 1,
+            'min_lng' => -1,
+            'max_lng' => 1,
+            'rules_json' => [],
+            'spawn_strategy' => 'manual',
+            'spawn_rules' => ['num_species' => 1],
+        ]);
+
+        $response = $this->withToken($token)->postJson('/api/location/update', [
+            'lat' => 0,
+            'lng' => 0,
+            'accuracy_m' => 5,
+        ]);
+
+        $response->assertOk();
+        $this->assertNotNull($response->json('encounter'));
+        $this->assertDatabaseCount('zone_spawn_entries', 1);
+
+        Event::assertDispatched(EncounterIssued::class);
     }
 }

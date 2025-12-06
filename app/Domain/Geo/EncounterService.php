@@ -3,6 +3,7 @@
 namespace App\Domain\Geo;
 
 use App\Domain\Encounters\ZoneSpawnGenerator;
+use App\Events\EncounterIssued;
 use App\Models\EncounterTicket;
 use App\Models\MonsterSpecies;
 use App\Models\SecurityEvent;
@@ -11,7 +12,7 @@ use App\Models\Zone;
 use App\Models\ZoneSpawnEntry;
 use App\Support\RedisRateLimiter;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Carbon\Carbon;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Redis;
 
 class EncounterService
@@ -70,7 +71,10 @@ class EncounterService
 
         $spawnEntries = $zone->spawnEntries()->with('species')->get();
 
-        if ($spawnEntries->isEmpty() && $zone->spawn_strategy !== 'manual') {
+        if (
+            $spawnEntries->isEmpty()
+            && ($zone->spawn_strategy !== 'manual' || ! empty($zone->spawn_rules ?? []))
+        ) {
             $spawnEntries = $this->spawnGenerator->generateFromZone($zone)->load('species');
         }
 
@@ -98,7 +102,11 @@ class EncounterService
 
         $this->storeCooldown($user, $zone);
 
-        return $ticket->load(['species', 'zone']);
+        $ticket = $ticket->load(['species', 'zone']);
+
+        broadcast(new EncounterIssued($ticket));
+
+        return $ticket;
     }
 
     public function resolveCapture(User $user, EncounterTicket $ticket): array

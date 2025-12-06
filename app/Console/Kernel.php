@@ -12,7 +12,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Live socket matchmaking is driven in real time; the command is available for manual recovery only.
+        $schedule->command('pvp:process-queue')->everyMinute();
     }
 
     /**

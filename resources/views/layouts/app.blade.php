@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ config('app.name', 'Monster Tamer') }}</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @auth
+        <meta name="user-id" content="{{ auth()->id() }}">
+        <meta name="encounter-index-url" content="{{ route('encounters.index') }}">
+    @endauth
     <script src="https://cdn.tailwindcss.com"></script>
     @vite(['resources/js/app.js'])
 </head>

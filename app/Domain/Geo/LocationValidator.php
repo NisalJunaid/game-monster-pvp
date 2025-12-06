@@ -4,7 +4,7 @@ namespace App\Domain\Geo;
 
 use App\Models\PlayerLocation;
 use App\Models\SecurityEvent;
-use Illuminate\Support\Carbon\Carbon;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 

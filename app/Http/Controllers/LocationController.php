@@ -7,7 +7,7 @@ use App\Domain\Geo\LocationValidator;
 use App\Models\PlayerLocation;
 use App\Support\RedisRateLimiter;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon\Carbon;
+use Illuminate\Support\Carbon;
 
 class LocationController extends Controller
 {

@@ -3,7 +3,7 @@
 namespace App\Support;
 
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Support\Carbon\Carbon;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Redis;
 
 class RedisRateLimiter
