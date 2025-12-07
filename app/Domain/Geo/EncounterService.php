@@ -4,6 +4,7 @@ namespace App\Domain\Geo;
 
 use App\Domain\Encounters\ZoneSpawnGenerator;
 use App\Events\EncounterIssued;
+use App\Events\WildEncountersUpdated;
 use App\Models\EncounterTicket;
 use App\Models\MonsterSpecies;
 use App\Models\SecurityEvent;
@@ -21,6 +22,7 @@ class EncounterService
     private const COOLDOWN_SECONDS = 30;
     private const ENCOUNTER_LIMIT = 3;
     private const ENCOUNTER_WINDOW_SECONDS = 60;
+    public const MAX_ACTIVE_TICKETS_PER_USER = 3;
 
     public function __construct(
         private GeoZoneService $geoZoneService,
@@ -32,24 +34,54 @@ class EncounterService
 
     public function currentTicket(User $user): ?EncounterTicket
     {
-        $ticket = EncounterTicket::where('user_id', $user->id)
+        return $this->activeTickets($user)->first();
+    }
+
+    public function activeTickets(User $user, ?Zone $zone = null): Collection
+    {
+        $query = EncounterTicket::where('user_id', $user->id)
             ->where('status', EncounterTicket::STATUS_ACTIVE)
-            ->latest('expires_at')
-            ->first();
+            ->latest('expires_at');
 
-        if ($ticket && $ticket->isExpired()) {
-            $ticket->update(['status' => EncounterTicket::STATUS_EXPIRED]);
-
-            return null;
+        if ($zone) {
+            $query->where('zone_id', $zone->id);
         }
 
-        return $ticket;
+        $tickets = $query->get()->load(['species', 'zone']);
+
+        $expiredIds = $tickets->filter(fn (EncounterTicket $ticket) => $ticket->isExpired())->pluck('id');
+
+        if ($expiredIds->isNotEmpty()) {
+            EncounterTicket::whereIn('id', $expiredIds)->update(['status' => EncounterTicket::STATUS_EXPIRED]);
+            $tickets = $tickets->reject(fn (EncounterTicket $ticket) => $expiredIds->contains($ticket->id));
+        }
+
+        return $tickets->values();
     }
 
     public function issueTicket(User $user, float $lat, float $lng): ?EncounterTicket
     {
-        if ($existing = $this->currentTicket($user)) {
-            return $existing;
+        return $this->ensureTickets($user, $lat, $lng)->first();
+    }
+
+    public function ensureTickets(User $user, float $lat, float $lng): Collection
+    {
+        $zone = $this->selectZone($lat, $lng);
+
+        if (! $zone) {
+            return new Collection();
+        }
+
+        return $this->ensureTicketsForZone($user, $zone, $lat, $lng);
+    }
+
+    public function ensureTicketsForZone(User $user, Zone $zone, float $lat, float $lng): Collection
+    {
+        $activeTickets = $this->activeTickets($user, $zone);
+        $maxTickets = (int) config('encounters.max_active_tickets', self::MAX_ACTIVE_TICKETS_PER_USER);
+
+        if ($activeTickets->count() >= $maxTickets || $this->onCooldown($user, $zone)) {
+            return $this->activeTickets($user, $zone);
         }
 
         $this->rateLimiter->ensureWithinLimit(
@@ -58,16 +90,6 @@ class EncounterService
             self::ENCOUNTER_WINDOW_SECONDS,
             'Encounter issuance rate limit exceeded.',
         );
-
-        $zone = $this->selectZone($lat, $lng);
-
-        if (! $zone) {
-            return null;
-        }
-
-        if ($this->onCooldown($user, $zone)) {
-            return null;
-        }
 
         $spawnEntries = $zone->spawnEntries()->with('species')->get();
 
@@ -79,34 +101,43 @@ class EncounterService
         }
 
         if ($spawnEntries->isEmpty()) {
-            return null;
+            return $activeTickets;
         }
 
-        $seed = random_int(1, PHP_INT_MAX);
-        $selected = $this->selectSpawnEntry($spawnEntries, $seed);
-        $rolledLevel = $this->rollLevel($selected, $seed);
+        $neededTickets = max(0, $maxTickets - $activeTickets->count());
 
-        $ticket = EncounterTicket::create([
-            'user_id' => $user->id,
-            'zone_id' => $zone->id,
-            'species_id' => $selected->species_id,
-            'rolled_level' => $rolledLevel,
-            'seed' => $seed,
-            'status' => EncounterTicket::STATUS_ACTIVE,
-            'expires_at' => Carbon::now()->addSeconds(self::TICKET_DURATION_SECONDS),
-        ]);
+        for ($i = 0; $i < $neededTickets; $i++) {
+            $seed = random_int(1, PHP_INT_MAX);
+            $selected = $this->selectSpawnEntry($spawnEntries, $seed);
+            $rolledLevel = $this->rollLevel($selected, $seed);
+            $maxHp = $this->calculateEncounterHp($selected->species, $rolledLevel);
 
-        $ticket->update([
-            'integrity_hash' => $this->generateIntegrityHash($ticket),
-        ]);
+            $ticket = EncounterTicket::create([
+                'user_id' => $user->id,
+                'zone_id' => $zone->id,
+                'species_id' => $selected->species_id,
+                'rolled_level' => $rolledLevel,
+                'seed' => $seed,
+                'status' => EncounterTicket::STATUS_ACTIVE,
+                'expires_at' => Carbon::now()->addSeconds(self::TICKET_DURATION_SECONDS),
+                'current_hp' => $maxHp,
+                'max_hp' => $maxHp,
+            ]);
+
+            $ticket->update([
+                'integrity_hash' => $this->generateIntegrityHash($ticket),
+            ]);
+
+            $activeTickets->push($ticket->load(['species', 'zone']));
+
+            broadcast(new EncounterIssued($ticket));
+        }
 
         $this->storeCooldown($user, $zone);
 
-        $ticket = $ticket->load(['species', 'zone']);
+        $freshTickets = $this->activeTickets($user, $zone);
 
-        broadcast(new EncounterIssued($ticket));
-
-        return $ticket;
+        return $freshTickets;
     }
 
     public function resolveCapture(User $user, EncounterTicket $ticket): array
@@ -138,6 +169,11 @@ class EncounterService
         ]);
 
         return ['success' => $success, 'roll' => $roll, 'threshold' => $captureThreshold];
+    }
+
+    public function broadcastWildEncounters(User $user): void
+    {
+        $this->broadcastEncounters($user);
     }
 
     private function selectZone(float $lat, float $lng): ?Zone
@@ -172,6 +208,13 @@ class EncounterService
         $max = max($min, (int) $entry->max_level);
 
         return $this->seededInt($seed, 2, $min, $max);
+    }
+
+    private function calculateEncounterHp(MonsterSpecies $species, int $level): int
+    {
+        $base = 30 + ($species->id % 10);
+
+        return max(10, $base + ($level * 5));
     }
 
     private function seededInt(int $seed, int $step, int $min, int $max): int
@@ -220,6 +263,13 @@ class EncounterService
         ]);
 
         abort(400, 'Encounter integrity check failed.');
+    }
+
+    private function broadcastEncounters(User $user): void
+    {
+        $tickets = $this->activeTickets($user);
+
+        broadcast(new WildEncountersUpdated($user->id, $tickets));
     }
 
     private function onCooldown(User $user, Zone $zone): bool

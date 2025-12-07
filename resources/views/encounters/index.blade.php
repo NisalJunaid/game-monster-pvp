@@ -1,7 +1,12 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="space-y-4" id="encounter-live" data-update-url="{{ route('encounters.update') }}" data-user-id="{{ auth()->id() }}" data-encounter-url="{{ route('encounters.index') }}" data-resolve-template="{{ route('encounters.resolve', ['ticket' => '__ID__']) }}">
+<div class="space-y-4" id="encounters-page"
+     data-update-url="{{ route('encounters.update') }}"
+     data-user-id="{{ auth()->id() }}"
+     data-encounter-url="{{ route('encounters.index') }}"
+     data-resolve-template="{{ route('encounters.resolve', ['ticket' => '__ID__']) }}"
+     data-battle-template="{{ route('battles.show', ['battle' => '__BATTLE__']) }}">
     <div class="bg-white shadow rounded p-6">
         <div class="flex items-center justify-between mb-2">
             <div>
@@ -38,29 +43,42 @@
 
     <div class="bg-white shadow rounded p-6">
         <div class="flex items-center justify-between mb-3">
-            <h2 class="text-xl font-semibold">Current Encounter</h2>
+            <div>
+                <h2 class="text-xl font-semibold">Active Encounters</h2>
+                <p class="text-gray-500 text-sm" id="zone-name">{{ $encounters->first()?->zone?->name ?? 'Unknown zone' }}</p>
+            </div>
             <span class="text-sm text-gray-500" id="encounter-expiry"></span>
         </div>
-        <div id="encounter-card">
-            @if($ticket)
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="font-bold">{{ $ticket->species->name }} (Lv {{ $ticket->rolled_level }})</p>
-                        <p class="text-gray-500 text-sm">Zone: {{ $ticket->zone?->name ?? 'Unknown' }}</p>
+        <div id="encounter-list" class="grid md:grid-cols-2 gap-4">
+            @forelse($encounters as $encounter)
+                <div class="border rounded p-4 shadow-sm flex flex-col space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-bold">{{ $encounter->species->name }} (Lv {{ $encounter->rolled_level }})</p>
+                            <p class="text-gray-500 text-sm">Zone: {{ $encounter->zone?->name ?? 'Unknown' }}</p>
+                        </div>
+                        <a href="{{ route('battles.show', ['battle' => $encounter->id]) }}" class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500">Battle</a>
                     </div>
-                    <form method="POST" action="{{ route('encounters.resolve', $ticket) }}" data-resolve-form>
-                        @csrf
-                        <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">Resolve Capture</button>
-                    </form>
+                    @php($percent = $encounter->max_hp ? floor(($encounter->current_hp ?? $encounter->max_hp) / $encounter->max_hp * 100) : 100)
+                    <div>
+                        <div class="flex items-center justify-between text-sm text-gray-600 mb-1">
+                            <span>HP</span>
+                            <span>{{ $encounter->current_hp ?? '?' }} / {{ $encounter->max_hp ?? '?' }}</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded h-2">
+                            <div class="bg-green-500 h-2 rounded" style="width: {{ $percent }}%"></div>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-500">Expires at {{ optional($encounter->expires_at)->format('H:i:s') ?? 'soon' }}</div>
                 </div>
-            @else
+            @empty
                 <p class="text-gray-600">No encounters available. Update your location to search again.</p>
-            @endif
+            @endforelse
         </div>
     </div>
 </div>
 
 <script>
-    window.__INITIAL_ENCOUNTER__ = @json($ticket?->load(['species', 'zone']));
+    window.__INITIAL_ENCOUNTERS__ = @json($encounters);
 </script>
 @endsection

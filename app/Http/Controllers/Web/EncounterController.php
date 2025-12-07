@@ -31,11 +31,11 @@ class EncounterController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $ticket = $this->encounterService->currentTicket($user);
+        $encounters = $this->encounterService->activeTickets($user);
         $location = PlayerLocation::where('user_id', $user->id)->first();
 
         return view('encounters.index', [
-            'ticket' => $ticket?->load(['species', 'zone']),
+            'encounters' => $encounters,
             'location' => $location,
         ]);
     }
@@ -95,7 +95,8 @@ class EncounterController extends Controller
                 ],
             );
 
-            $ticket = $this->encounterService->issueTicket($user, $data['lat'], $data['lng']);
+            $encounters = $this->encounterService->ensureTickets($user, $data['lat'], $data['lng']);
+            $this->encounterService->broadcastWildEncounters($user);
         } catch (\Throwable $exception) {
             if ($expectsJson) {
                 return response()->json([
@@ -107,12 +108,13 @@ class EncounterController extends Controller
                 'location' => $exception->getMessage() ?: 'Unable to update location right now.',
             ])->withInput();
         }
-        $message = $ticket ? 'Location updated. Encounter available!' : 'Location updated. No encounters nearby yet.';
+        $message = $encounters->isNotEmpty() ? 'Location updated. Encounter available!' : 'Location updated. No encounters nearby yet.';
 
         if ($expectsJson) {
             return response()->json([
                 'message' => $message,
-                'encounter' => $ticket?->load(['species', 'zone']),
+                'encounters' => $encounters,
+                'encounter' => $encounters->first(),
             ]);
         }
 

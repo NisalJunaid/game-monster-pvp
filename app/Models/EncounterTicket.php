@@ -23,6 +23,8 @@ class EncounterTicket extends Model
         'status',
         'expires_at',
         'integrity_hash',
+        'current_hp',
+        'max_hp',
     ];
 
     protected $casts = [

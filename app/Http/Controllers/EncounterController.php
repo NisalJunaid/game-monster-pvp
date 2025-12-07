@@ -14,10 +14,11 @@ class EncounterController extends Controller
 
     public function current(Request $request)
     {
-        $ticket = $this->encounterService->currentTicket($request->user());
+        $encounters = $this->encounterService->activeTickets($request->user());
 
         return response()->json([
-            'encounter' => $ticket?->load(['species', 'zone']),
+            'encounters' => $encounters,
+            'encounter' => $encounters->first(),
         ]);
     }
 

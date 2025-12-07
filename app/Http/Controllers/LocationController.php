@@ -63,11 +63,13 @@ class LocationController extends Controller
             ],
         );
 
-        $ticket = $this->encounterService->issueTicket($user, $data['lat'], $data['lng']);
+        $encounters = $this->encounterService->ensureTickets($user, $data['lat'], $data['lng']);
+        $this->encounterService->broadcastWildEncounters($user);
 
         return response()->json([
             'location' => $location,
-            'encounter' => $ticket,
+            'encounters' => $encounters,
+            'encounter' => $encounters->first(),
         ]);
     }
 }
