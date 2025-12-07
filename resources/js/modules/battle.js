@@ -280,6 +280,10 @@ export function initBattleLive(root = document) {
     setStatus('Listening for opponent actions...');
 
     window.Echo.private(`battles.${battleId}`).listen('.BattleUpdated', (payload) => {
+        if (!payload || !payload.state) {
+            return;
+        }
+
         battleState = payload.state || battleState;
         battleStatus = payload.status || battleStatus;
         winnerId = payload.winner_user_id ?? winnerId;

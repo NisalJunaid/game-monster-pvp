@@ -73,10 +73,16 @@ function initMatchmakingPanel() {
 
             try {
                 const response = await axios.get(url, { headers: { Accept: 'text/html' } });
-                panel.outerHTML = response.data;
-                initBattleLive();
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = response.data;
+                const newPanel = wrapper.firstElementChild;
 
-                return;
+                if (newPanel) {
+                    panel.replaceWith(newPanel);
+                    initBattleLive(newPanel);
+
+                    return;
+                }
             } catch (error) {
                 console.error('Failed to load battle fragment', error);
             }
@@ -85,6 +91,8 @@ function initMatchmakingPanel() {
         if (battleUrlTemplate) {
             const url = battleUrlTemplate.replace('__BATTLE_ID__', battleId);
             window.location.href = url;
+        } else {
+            window.location.href = '/pvp';
         }
     };
 
