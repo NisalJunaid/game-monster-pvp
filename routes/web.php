@@ -8,7 +8,11 @@ use App\Http\Controllers\Web\BattleController as WebBattleController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\EncounterController as WebEncounterController;
 use App\Http\Controllers\Web\PvpController as WebPvpController;
+use App\Events\BattleUpdated;
+use App\Models\Battle;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Symfony\Component\HttpFoundation\Response;
 
 /*
 |--------------------------------------------------------------------------
@@ -49,6 +53,48 @@ Route::middleware('auth')->group(function () {
     Route::get('/battles/{battle}', [WebBattleController::class, 'show'])->name('battles.show');
     Route::get('/battles/{battle}/state', [WebBattleController::class, 'state'])->name('battles.state');
     Route::post('/battles/{battle}', [WebBattleController::class, 'act'])->name('battles.act');
+
+    Route::middleware(function ($request, $next) {
+        if (! config('app.debug')) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+
+        return $next($request);
+    })->group(function () {
+        Route::get('/debug/broadcasting', function (Request $request) {
+            return response()->json([
+                'app_url' => config('app.url'),
+                'session_domain' => config('session.domain'),
+                'session_secure' => config('session.secure'),
+                'sanctum_stateful' => config('sanctum.stateful') ?? null,
+                'broadcasting_auth_route' => Route::has('broadcasting.auth'),
+                'broadcasting_default' => config('broadcasting.default'),
+                'pusher' => [
+                    'host' => config('broadcasting.connections.pusher.options.host'),
+                    'port' => config('broadcasting.connections.pusher.options.port'),
+                    'scheme' => config('broadcasting.connections.pusher.options.scheme'),
+                ],
+            ]);
+        })->name('debug.broadcasting');
+
+        Route::post('/debug/broadcast-test/{battle}', function (Request $request, Battle $battle) {
+            if (! in_array($request->user()->id, [$battle->player1_id, $battle->player2_id], true)) {
+                abort(Response::HTTP_FORBIDDEN, 'You are not part of this battle.');
+            }
+
+            $state = $battle->meta_json;
+
+            broadcast(new BattleUpdated(
+                battleId: $battle->id,
+                state: $state,
+                status: $battle->status,
+                nextActorId: $state['next_actor_id'] ?? null,
+                winnerUserId: $battle->winner_user_id,
+            ));
+
+            return response()->json(['ok' => true]);
+        })->name('debug.broadcast_test');
+    });
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {

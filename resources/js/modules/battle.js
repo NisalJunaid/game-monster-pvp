@@ -195,9 +195,13 @@ export function initBattleLive(root = document) {
     let pollHandle = null;
     let watchdogHandle = null;
     let awaitingEvent = false;
+    let eventReceived = false;
+    let subscriptionSucceeded = false;
+    let subscriptionErrored = false;
     let lastUpdateAt = Date.now();
     let hasScheduledCompletion = false;
     let currentEchoState = window.__echoConnectionState || (window.Echo ? 'connecting' : 'disconnected');
+    let initialEventTimeout = null;
 
     const updateHeader = () => {
         if (statusTextEl) {
@@ -294,7 +298,17 @@ export function initBattleLive(root = document) {
 
         if (fromEvent && awaitingEvent) {
             awaitingEvent = false;
-            stopPolling();
+            eventReceived = true;
+        }
+
+        if (fromEvent) {
+            eventReceived = true;
+            console.info('Battle update received via broadcast', {
+                battle_id: payload?.battle_id,
+                status: payload?.status,
+                next_actor_id: payload?.next_actor_id,
+            });
+            attemptStopPolling();
         }
 
         if (payload.players) {
@@ -332,7 +346,13 @@ export function initBattleLive(root = document) {
                 setStatus('Unable to sync battle right now.');
             });
 
-    const stopPolling = () => {
+    const attemptStopPolling = (force = false) => {
+        const canStop = force || (subscriptionSucceeded && eventReceived);
+
+        if (!canStop) {
+            return;
+        }
+
         if (pollHandle) {
             clearInterval(pollHandle);
             pollHandle = null;
@@ -386,17 +406,46 @@ export function initBattleLive(root = document) {
         scheduleCompletion();
     }
 
-    const shouldPoll = () => !window.Echo || currentEchoState === 'disconnected';
+    const shouldPoll = () => !window.Echo || currentEchoState === 'disconnected' || subscriptionErrored;
 
     if (window.Echo && battleId) {
         setStatus('Listening for opponent actions...');
-        window.Echo.private(`battles.${battleId}`).listen('.BattleUpdated', (payload) => {
+        const channel = window.Echo.private(`battles.${battleId}`);
+        const subscription = channel?.subscription;
+
+        if (subscription?.bind) {
+            subscription.bind('pusher:subscription_succeeded', () => {
+                console.info('Battle live subscription succeeded', { channel: subscription.name });
+                subscriptionSucceeded = true;
+                subscriptionErrored = false;
+                setStatus('Live: subscribed to battle channel.');
+                attemptStopPolling();
+            });
+
+            subscription.bind('pusher:subscription_error', (status) => {
+                console.error('Battle live subscription error', status);
+                subscriptionErrored = true;
+                setStatus('Live updates unavailable (subscription error).');
+                startPolling({ expectEvent: true });
+            });
+        }
+
+        channel.listen('.BattleUpdated', (payload) => {
             applyUpdate(payload, { fromEvent: true });
         });
     }
 
     if (shouldPoll()) {
         startPolling();
+    }
+
+    if (!initialEventTimeout && battleStatus === 'active') {
+        initialEventTimeout = window.setTimeout(() => {
+            if (!eventReceived && battleStatus === 'active') {
+                console.warn('No BattleUpdated event received within 6 seconds; starting fallback polling.');
+                startPolling({ expectEvent: true });
+            }
+        }, 6000);
     }
 
     startWatchdog();
@@ -407,7 +456,7 @@ export function initBattleLive(root = document) {
 
         currentEchoState = state;
         if (state === 'connected') {
-            stopPolling();
+            attemptStopPolling();
             setStatus('Listening for opponent actions...');
         } else if (shouldPoll()) {
             startPolling();
