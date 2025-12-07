@@ -9,6 +9,7 @@ use App\Models\Battle;
 use App\Models\MatchmakingQueue;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class PvpController extends Controller
 {
@@ -26,7 +27,28 @@ class PvpController extends Controller
         $latestBattle = Battle::where(function ($query) use ($user) {
             $query->where('player1_id', $user->id)->orWhere('player2_id', $user->id);
         })->latest('id')->first();
+        $activeBattle = Battle::where('status', 'active')
+            ->where(function ($query) use ($user) {
+                $query->where('player1_id', $user->id)->orWhere('player2_id', $user->id);
+            })
+            ->latest('id')
+            ->first();
         $queueCount = MatchmakingQueue::count();
+
+        if ($activeBattle) {
+            $activeBattle->load(['player1', 'player2', 'winner']);
+
+            return view('pvp.battle_lobby', [
+                'battle' => $activeBattle,
+                'state' => $activeBattle->meta_json,
+                'queueEntry' => $queueEntry,
+                'latestBattle' => $latestBattle,
+                'pvpProfile' => $profile,
+                'searchTimeout' => LiveMatchmaker::SEARCH_TIMEOUT_SECONDS,
+                'currentWindow' => $this->matchmaker->windowForEntry($queueEntry),
+                'queueCount' => $queueCount,
+            ]);
+        }
 
         return view('pvp.index', [
             'queueEntry' => $queueEntry,
@@ -35,6 +57,7 @@ class PvpController extends Controller
             'searchTimeout' => LiveMatchmaker::SEARCH_TIMEOUT_SECONDS,
             'currentWindow' => $this->matchmaker->windowForEntry($queueEntry),
             'queueCount' => $queueCount,
+            'activeBattleId' => $activeBattle?->id,
         ]);
     }
 
@@ -75,5 +98,27 @@ class PvpController extends Controller
         }
 
         return back()->with('status', 'Removed from matchmaking queue.');
+    }
+
+    public function battleFragment(Request $request, Battle $battle)
+    {
+        $this->assertParticipant($request, $battle);
+
+        $battle->load(['player1', 'player2', 'winner']);
+
+        return view('pvp._battle_fragment', [
+            'battle' => $battle,
+            'state' => $battle->meta_json,
+            'currentWindow' => $this->matchmaker->windowForEntry(null),
+        ]);
+    }
+
+    private function assertParticipant(Request $request, Battle $battle): void
+    {
+        $user = $request->user();
+
+        if (! in_array($user->id, [$battle->player1_id, $battle->player2_id], true)) {
+            abort(Response::HTTP_FORBIDDEN, 'You are not part of this battle.');
+        }
     }
 }

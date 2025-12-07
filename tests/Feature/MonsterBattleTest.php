@@ -61,6 +61,44 @@ class MonsterBattleTest extends TestCase
         $this->assertEquals(2.0, $damageEvent['multipliers']['type']);
     }
 
+    public function test_neutral_matchups_require_multiple_turns(): void
+    {
+        [$player, $opponent, $tokenPlayer, $tokenOpponent] = $this->buildPlayers('Water', 'Water');
+        [$battleId] = $this->startBattle($player, $opponent, $tokenPlayer, $tokenOpponent, 1234);
+
+        $this->withToken($tokenPlayer)->postJson("/api/battles/{$battleId}/act", ['type' => 'move', 'slot' => 1])->assertOk();
+        $this->withToken($tokenOpponent)->postJson("/api/battles/{$battleId}/act", ['type' => 'move', 'slot' => 1])->assertOk();
+
+        $state = $this->withToken($tokenPlayer)->getJson("/api/battles/{$battleId}")->json('data.meta');
+
+        $playerMon = $state['participants'][$player->id]['monsters'][0];
+        $opponentMon = $state['participants'][$opponent->id]['monsters'][0];
+
+        $this->assertGreaterThan(0, $playerMon['current_hp']);
+        $this->assertGreaterThan(0, $opponentMon['current_hp']);
+        $this->assertLessThan($playerMon['max_hp'] * 0.6, $playerMon['max_hp'] - $playerMon['current_hp']);
+        $this->assertLessThan($opponentMon['max_hp'] * 0.6, $opponentMon['max_hp'] - $opponentMon['current_hp']);
+    }
+
+    public function test_type_advantage_hits_harder_than_neutral(): void
+    {
+        [$player, $opponent, $tokenPlayer, $tokenOpponent] = $this->buildPlayers('Fire', 'Nature');
+        [$battleId] = $this->startBattle($player, $opponent, $tokenPlayer, $tokenOpponent, 5151);
+
+        $advResponse = $this->withToken($tokenPlayer)->postJson("/api/battles/{$battleId}/act", ['type' => 'move', 'slot' => 1]);
+        $advDamage = collect($advResponse->json('turn.events'))->firstWhere('type', 'damage');
+
+        [$neutralPlayer, $neutralOpponent, $neutralTokenPlayer, $neutralTokenOpponent] = $this->buildPlayers('Water', 'Water');
+        [$neutralBattle] = $this->startBattle($neutralPlayer, $neutralOpponent, $neutralTokenPlayer, $neutralTokenOpponent, 6161);
+        $neutralResponse = $this->withToken($neutralTokenPlayer)->postJson("/api/battles/{$neutralBattle}/act", ['type' => 'move', 'slot' => 1]);
+        $neutralDamage = collect($neutralResponse->json('turn.events'))->firstWhere('type', 'damage');
+
+        $this->assertNotNull($advDamage);
+        $this->assertNotNull($neutralDamage);
+        $this->assertGreaterThanOrEqual(2.0, $advDamage['multipliers']['type']);
+        $this->assertGreaterThan($neutralDamage['amount'], $advDamage['amount']);
+    }
+
     public function test_battle_completes_and_sets_winner(): void
     {
         [$player, $opponent, $tokenPlayer, $tokenOpponent] = $this->buildPlayers();

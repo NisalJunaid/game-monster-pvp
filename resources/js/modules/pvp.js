@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { initBattleLive } from './battle';
 
 function initMatchmakingPanel() {
     const panel = document.getElementById('matchmaking-panel');
@@ -10,6 +11,7 @@ function initMatchmakingPanel() {
     const queueUrl = panel.dataset.queueUrl;
     const dequeueUrl = panel.dataset.dequeueUrl;
     const battleUrlTemplate = panel.dataset.battleUrl;
+    const fragmentUrlTemplate = panel.dataset.battleFragmentUrl;
     const userId = Number(panel.dataset.userId || 0);
     const searchTimeout = Number(panel.dataset.searchTimeout || 45) * 1000;
 
@@ -45,7 +47,11 @@ function initMatchmakingPanel() {
             searchingBanner.classList.add('hidden');
         }
 
-        axios
+        if (!dequeueUrl) {
+            return Promise.resolve();
+        }
+
+        return axios
             .delete(dequeueUrl, { headers: { Accept: 'application/json' } })
             .then(() => {
                 if (!silent) {
@@ -59,12 +65,34 @@ function initMatchmakingPanel() {
             });
     };
 
+    const loadBattleUi = async (battleId) => {
+        if (!battleId) return;
+
+        if (fragmentUrlTemplate) {
+            const url = fragmentUrlTemplate.replace('__BATTLE_ID__', battleId);
+
+            try {
+                const response = await axios.get(url, { headers: { Accept: 'text/html' } });
+                panel.outerHTML = response.data;
+                initBattleLive();
+
+                return;
+            } catch (error) {
+                console.error('Failed to load battle fragment', error);
+            }
+        }
+
+        if (battleUrlTemplate) {
+            const url = battleUrlTemplate.replace('__BATTLE_ID__', battleId);
+            window.location.href = url;
+        }
+    };
+
     const handleMatchFound = (battleId) => {
         clearInterval(countdownHandle ?? undefined);
         countdownHandle = null;
 
-        const url = battleUrlTemplate.replace('__BATTLE_ID__', battleId);
-        window.location.href = url;
+        loadBattleUi(battleId);
     };
 
     const updateCountdown = (endTime) => {
@@ -100,6 +128,11 @@ function initMatchmakingPanel() {
         }
 
         setStatus('Searching for an opponent...');
+
+        if (!queueUrl) {
+            setStatus('Matchmaking is unavailable right now.');
+            return;
+        }
 
         axios
             .post(
@@ -142,7 +175,7 @@ function initMatchmakingPanel() {
         });
     }
 
-    if (panel.dataset.isQueued === '1' && panel.dataset.currentMode) {
+    if (panel.dataset.isQueued === '1' && panel.dataset.currentMode && queueUrl) {
         startCountdown();
         setStatus('Reconnecting to live search...');
         if (modeBadge) {
@@ -153,6 +186,10 @@ function initMatchmakingPanel() {
             searchingBanner.classList.remove('hidden');
         }
         setLadderWindow(panel.dataset.ladderWindow);
+    }
+
+    if (panel.dataset.activeBattleId) {
+        loadBattleUi(panel.dataset.activeBattleId);
     }
 
     if (window.Echo && userId) {

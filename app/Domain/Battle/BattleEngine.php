@@ -138,20 +138,20 @@ class BattleEngine
     {
         return [
             'id' => 0,
-            'level' => 5,
+            'level' => 3,
             'name' => 'Street Brawler',
             'types' => [],
             'type_names' => ['Physical'],
             'stats' => [
-                'hp' => 50,
-                'attack' => 40,
-                'defense' => 35,
-                'sp_attack' => 30,
-                'sp_defense' => 30,
-                'speed' => 35,
+                'hp' => 40,
+                'attack' => 25,
+                'defense' => 20,
+                'sp_attack' => 15,
+                'sp_defense' => 15,
+                'speed' => 20,
             ],
-            'max_hp' => 50,
-            'current_hp' => 50,
+            'max_hp' => 40,
+            'current_hp' => 40,
             'status' => null,
             'moves' => $this->fallbackMoves(),
         ];
@@ -167,7 +167,7 @@ class BattleEngine
                 'type_id' => 0,
                 'type' => 'Neutral',
                 'category' => 'physical',
-                'power' => 35,
+                'power' => 18,
                 'effect' => [],
             ],
             [
@@ -177,7 +177,7 @@ class BattleEngine
                 'type_id' => 0,
                 'type' => 'Neutral',
                 'category' => 'physical',
-                'power' => 45,
+                'power' => 22,
                 'effect' => [],
             ],
             [
@@ -187,7 +187,7 @@ class BattleEngine
                 'type_id' => 0,
                 'type' => 'Neutral',
                 'category' => 'physical',
-                'power' => 40,
+                'power' => 20,
                 'effect' => ['status' => 'shock'],
             ],
         ];
@@ -304,7 +304,7 @@ class BattleEngine
         $attackStat = $move['category'] === 'special' ? $attacker['stats']['sp_attack'] : $attacker['stats']['attack'];
         $defenseStat = $move['category'] === 'special' ? $defender['stats']['sp_defense'] : $defender['stats']['defense'];
 
-        $base = $attacker['level'] + $move['power'] + (int) floor($attackStat / max(1, $defenseStat));
+        $base = (((2 * $attacker['level']) / 5 + 2) * $move['power'] * ($attackStat / max(1, $defenseStat))) / 50 + 2;
         $stab = in_array($move['type_id'], $attacker['types'], true) ? 1.5 : 1.0;
         $typeMultiplier = $this->typeMultiplier($move['type_id'], $defender['types']);
         $crit = $rng->nextFloat() < 0.1 ? 1.5 : 1.0;
@@ -318,6 +318,10 @@ class BattleEngine
         ];
 
         $damage = (int) floor($base * $stab * $typeMultiplier * $crit * $randomFactor);
+
+        if ($typeMultiplier === 1.0 && $crit === 1.0 && $damage > ($defender['max_hp'] * 0.4)) {
+            $damage = (int) floor($damage * 0.85);
+        }
 
         return max(1, $damage);
     }

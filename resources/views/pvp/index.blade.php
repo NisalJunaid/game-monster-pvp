@@ -23,11 +23,13 @@
          data-queue-url="{{ route('pvp.queue') }}"
          data-dequeue-url="{{ route('pvp.dequeue') }}"
          data-battle-url="{{ url('/battles/__BATTLE_ID__') }}"
+         data-battle-fragment-url="{{ route('pvp.battle_fragment', ['battle' => '__BATTLE_ID__']) }}"
          data-search-timeout="{{ $searchTimeout }}"
          data-ladder-window="{{ $currentWindow }}"
          data-queue-size="{{ $queueCount }}"
          data-is-queued="{{ $queueEntry ? '1' : '0' }}"
-         data-current-mode="{{ $queueEntry->mode ?? '' }}">
+         data-current-mode="{{ $queueEntry->mode ?? '' }}"
+         data-active-battle-id="{{ $activeBattleId ?? '' }}">
         <div class="flex items-center justify-between">
             <div>
                 <p class="text-sm text-gray-600">Ladder search window</p>
@@ -45,8 +47,8 @@
             <div class="border rounded-lg p-4 bg-gray-50 space-y-2">
                 <p class="text-sm font-semibold text-gray-700">Choose queue</p>
                 <div class="flex flex-wrap gap-2">
-                    <button class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-500" data-queue-mode data-queue-mode="ranked">Ranked ladder</button>
-                    <button class="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-500" data-queue-mode data-queue-mode="casual">Casual</button>
+                    <button class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-500" data-queue-mode="ranked">Ranked ladder</button>
+                    <button class="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-500" data-queue-mode="casual">Casual</button>
                 </div>
                 <p class="text-xs text-gray-500">Search starts instantly when you press a mode.</p>
             </div>
