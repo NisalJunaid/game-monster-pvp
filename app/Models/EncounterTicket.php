@@ -28,6 +28,7 @@ class EncounterTicket extends Model
     protected $casts = [
         'seed' => 'int',
         'rolled_level' => 'int',
+        'battle_state' => 'array',
         'expires_at' => 'datetime',
     ];
 
