@@ -25,6 +25,7 @@ class EncounterTicket extends Model
         'integrity_hash',
         'current_hp',
         'max_hp',
+        'battle_state',
     ];
 
     protected $casts = [
