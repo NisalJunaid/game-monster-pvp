@@ -32,6 +32,31 @@ class BattleController extends Controller
         ]);
     }
 
+    public function state(Request $request, Battle $battle)
+    {
+        $viewer = $this->assertParticipant($request, $battle);
+
+        $battle->load(['player1', 'player2', 'winner']);
+        $state = $battle->meta_json;
+
+        return response()->json([
+            'battle' => [
+                'id' => $battle->id,
+                'status' => $battle->status,
+                'mode' => $state['mode'] ?? 'ranked',
+                'player1_id' => $battle->player1_id,
+                'player2_id' => $battle->player2_id,
+                'winner_user_id' => $battle->winner_user_id,
+            ],
+            'players' => [
+                $battle->player1_id => $battle->player1?->name ?? 'Player '.$battle->player1_id,
+                $battle->player2_id => $battle->player2?->name ?? 'Player '.$battle->player2_id,
+            ],
+            'state' => $state,
+            'viewer_id' => $viewer->id,
+        ]);
+    }
+
     public function act(BattleActionRequest $request, Battle $battle): RedirectResponse
     {
         $actor = $this->assertParticipant($request, $battle);

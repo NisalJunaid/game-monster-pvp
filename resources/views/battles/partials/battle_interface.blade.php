@@ -40,7 +40,7 @@
      data-act-url="{{ route('battles.act', $battle) }}"
      data-refresh-url="{{ route('battles.show', $battle) }}">
     <div class="bg-white shadow rounded-xl p-6">
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold">Battle #{{ $battle->id }}</h1>
                 <p class="text-gray-600">Status: <span data-battle-status-text>{{ ucfirst($battle->status) }}</span> | Seed: {{ $battle->seed }}</p>
@@ -51,10 +51,13 @@
                     <p class="text-green-700 font-semibold hidden" data-battle-winner></p>
                 @endif
             </div>
-            <div class="text-right text-sm text-gray-600">
-                <p>Next actor: <span data-next-actor>{{ $state['next_actor_id'] ?? 'Unknown' }}</span></p>
-                <p>Mode: <span data-battle-mode>{{ ucfirst($state['mode'] ?? 'ranked') }}</span></p>
-                <p class="text-xs text-gray-500" data-battle-live-status>Connecting to live battle feed...</p>
+            <div class="flex items-center gap-3">
+                @include('partials.live_badge')
+                <div class="text-right text-sm text-gray-600">
+                    <p>Next actor: <span data-next-actor>{{ $state['next_actor_id'] ?? 'Unknown' }}</span></p>
+                    <p>Mode: <span data-battle-mode>{{ ucfirst($state['mode'] ?? 'ranked') }}</span></p>
+                    <p class="text-xs text-gray-500" data-battle-live-status>Connecting to live battle feed...</p>
+                </div>
             </div>
         </div>
     </div>

@@ -1,29 +1,151 @@
 import axios from 'axios';
 import { initBattleLive } from './battle';
 
-function initMatchmakingPanel() {
-    const panel = document.getElementById('matchmaking-panel');
+let echoState = window.__echoConnectionState || (window.Echo ? 'connecting' : 'disconnected');
+let queuePollHandle = null;
 
-    if (!panel) {
+const getPanel = (panel) => panel ?? document.getElementById('matchmaking-panel');
+
+const stopQueuePolling = () => {
+    if (queuePollHandle) {
+        clearInterval(queuePollHandle);
+        queuePollHandle = null;
+    }
+};
+
+const shouldUsePolling = () => !window.Echo || echoState === 'disconnected';
+
+const loadBattleUi = async (battleId, panel) => {
+    const activePanel = getPanel(panel);
+    const fallbackBattleId = battleId || activePanel?.dataset.activeBattleId;
+
+    if (!fallbackBattleId) return;
+
+    const fragmentUrlTemplate = activePanel?.dataset.battleFragmentUrl;
+    const battleUrlTemplate = activePanel?.dataset.battleUrl;
+
+    if (fragmentUrlTemplate) {
+        const url = fragmentUrlTemplate.replace('__BATTLE_ID__', fallbackBattleId);
+
+        try {
+            const response = await axios.get(url, { headers: { Accept: 'text/html' } });
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = response.data;
+            const newPanel = wrapper.firstElementChild;
+
+            if (newPanel && activePanel) {
+                activePanel.replaceWith(newPanel);
+                initBattleLive(newPanel);
+                return newPanel;
+            }
+        } catch (error) {
+            console.error('Failed to load battle fragment', error);
+        }
+    }
+
+    if (battleUrlTemplate) {
+        const url = battleUrlTemplate.replace('__BATTLE_ID__', fallbackBattleId);
+        window.location.href = url;
+    } else {
+        window.location.href = '/pvp';
+    }
+
+    return null;
+};
+
+export async function refreshPvpPanel(battleId = null) {
+    const panel = getPanel();
+
+    if (!panel) return null;
+
+    try {
+        const response = await axios.get('/pvp/fragment', { headers: { Accept: 'text/html' } });
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = response.data;
+        const newPanel = wrapper.firstElementChild;
+
+        if (newPanel) {
+            panel.replaceWith(newPanel);
+            initMatchmakingPanel(newPanel);
+            const battleContainer = newPanel.querySelector('[data-battle-live]');
+            if (battleContainer) {
+                initBattleLive(newPanel);
+
+                if ((battleContainer.dataset.battleStatus || 'active') !== 'active') {
+                    const banner = newPanel.querySelector('[data-battle-finished-banner]');
+                    if (banner) {
+                        banner.classList.remove('hidden');
+                    }
+                    window.setTimeout(() => refreshPvpPanel(), 1500);
+                }
+            } else {
+                stopQueuePolling();
+            }
+
+            return newPanel;
+        }
+    } catch (error) {
+        console.error('Failed to refresh PvP panel', error);
+    }
+
+    await loadBattleUi(battleId, panel);
+
+    return null;
+}
+
+window.refreshPvpPanel = refreshPvpPanel;
+
+const startQueuePolling = () => {
+    if (!shouldUsePolling() || queuePollHandle) {
         return;
     }
 
-    const queueUrl = panel.dataset.queueUrl;
-    const dequeueUrl = panel.dataset.dequeueUrl;
-    const battleUrlTemplate = panel.dataset.battleUrl;
-    const fragmentUrlTemplate = panel.dataset.battleFragmentUrl;
-    const userId = Number(panel.dataset.userId || 0);
-    const searchTimeout = Number(panel.dataset.searchTimeout || 45) * 1000;
+    queuePollHandle = window.setInterval(async () => {
+        try {
+            const response = await axios.get('/pvp/status', { headers: { Accept: 'application/json' } });
+            const data = response.data || {};
+            if (data.active_battle_id) {
+                stopQueuePolling();
+                await refreshPvpPanel(data.active_battle_id);
+            }
+        } catch (error) {
+            console.error('Queue polling failed', error);
+        }
+    }, 2000);
+};
 
-    const statusEl = panel.querySelector('[data-status-text]');
-    const ladderWindowEl = panel.querySelector('[data-ladder-window]');
-    const timerEl = panel.querySelector('[data-countdown]');
-    const queueSizeEl = panel.querySelector('[data-queue-size]');
-    const modeBadge = panel.querySelector('[data-queue-mode-label]');
-    const searchingBanner = panel.querySelector('[data-searching-banner]');
+window.addEventListener('echo:status', (event) => {
+    const state = event.detail?.state;
+    if (!state) return;
+    echoState = state;
+    if (state === 'connected') {
+        stopQueuePolling();
+    } else if (shouldUsePolling()) {
+        startQueuePolling();
+    }
+});
 
-    if (queueSizeEl && panel.dataset.queueSize) {
-        queueSizeEl.textContent = panel.dataset.queueSize;
+function initMatchmakingPanel(panel = getPanel()) {
+    const activePanel = getPanel(panel);
+
+    if (!activePanel) {
+        return;
+    }
+
+    const queueUrl = activePanel.dataset.queueUrl;
+    const dequeueUrl = activePanel.dataset.dequeueUrl;
+    const userId = Number(activePanel.dataset.userId || 0);
+    const searchTimeout = Number(activePanel.dataset.searchTimeout || 45) * 1000;
+
+    const statusEl = activePanel.querySelector('[data-status-text]');
+    const ladderWindowEl = activePanel.querySelector('[data-ladder-window]');
+    const timerEl = activePanel.querySelector('[data-countdown]');
+    const queueSizeEl = activePanel.querySelector('[data-queue-size]');
+    const modeBadge = activePanel.querySelector('[data-queue-mode-label]');
+    const searchingBanner = activePanel.querySelector('[data-searching-banner]');
+
+    if (queueSizeEl && activePanel.dataset.queueSize) {
+        queueSizeEl.textContent = activePanel.dataset.queueSize;
     }
 
     let countdownHandle = null;
@@ -43,6 +165,7 @@ function initMatchmakingPanel() {
     const leaveQueue = (silent = false) => {
         clearInterval(countdownHandle ?? undefined);
         countdownHandle = null;
+        stopQueuePolling();
         if (searchingBanner) {
             searchingBanner.classList.add('hidden');
         }
@@ -65,42 +188,15 @@ function initMatchmakingPanel() {
             });
     };
 
-    const loadBattleUi = async (battleId) => {
-        if (!battleId) return;
-
-        if (fragmentUrlTemplate) {
-            const url = fragmentUrlTemplate.replace('__BATTLE_ID__', battleId);
-
-            try {
-                const response = await axios.get(url, { headers: { Accept: 'text/html' } });
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = response.data;
-                const newPanel = wrapper.firstElementChild;
-
-                if (newPanel) {
-                    panel.replaceWith(newPanel);
-                    initBattleLive(newPanel);
-
-                    return;
-                }
-            } catch (error) {
-                console.error('Failed to load battle fragment', error);
-            }
-        }
-
-        if (battleUrlTemplate) {
-            const url = battleUrlTemplate.replace('__BATTLE_ID__', battleId);
-            window.location.href = url;
-        } else {
-            window.location.href = '/pvp';
-        }
-    };
-
-    const handleMatchFound = (battleId) => {
+    const handleMatchFound = async (battleId) => {
         clearInterval(countdownHandle ?? undefined);
         countdownHandle = null;
+        stopQueuePolling();
 
-        loadBattleUi(battleId);
+        const refreshed = await refreshPvpPanel(battleId);
+        if (!refreshed && battleId) {
+            await loadBattleUi(battleId, activePanel);
+        }
     };
 
     const updateCountdown = (endTime) => {
@@ -152,11 +248,13 @@ function initMatchmakingPanel() {
             )
             .then((response) => {
                 const data = response.data || {};
-                setLadderWindow(data.ladder_window || panel.dataset.ladderWindow);
+                setLadderWindow(data.ladder_window || activePanel.dataset.ladderWindow);
                 startCountdown();
 
                 if (data.status === 'matched' && data.battle_id) {
                     handleMatchFound(data.battle_id);
+                } else if (shouldUsePolling()) {
+                    startQueuePolling();
                 }
             })
             .catch(() => {
@@ -164,7 +262,7 @@ function initMatchmakingPanel() {
             });
     };
 
-    const queueButtons = panel.querySelectorAll('[data-queue-mode]');
+    const queueButtons = activePanel.querySelectorAll('[data-queue-mode]');
     queueButtons.forEach((button) => {
         button.addEventListener('click', (event) => {
             event.preventDefault();
@@ -175,7 +273,7 @@ function initMatchmakingPanel() {
         });
     });
 
-    const leaveButton = panel.querySelector('[data-leave-queue]');
+    const leaveButton = activePanel.querySelector('[data-leave-queue]');
     if (leaveButton) {
         leaveButton.addEventListener('click', (event) => {
             event.preventDefault();
@@ -183,21 +281,25 @@ function initMatchmakingPanel() {
         });
     }
 
-    if (panel.dataset.isQueued === '1' && panel.dataset.currentMode && queueUrl) {
+    if (activePanel.dataset.isQueued === '1' && activePanel.dataset.currentMode && queueUrl) {
         startCountdown();
         setStatus('Reconnecting to live search...');
         if (modeBadge) {
-            modeBadge.textContent = panel.dataset.currentMode;
+            modeBadge.textContent = activePanel.dataset.currentMode;
             modeBadge.classList.remove('hidden');
         }
         if (searchingBanner) {
             searchingBanner.classList.remove('hidden');
         }
-        setLadderWindow(panel.dataset.ladderWindow);
+        setLadderWindow(activePanel.dataset.ladderWindow);
+
+        if (shouldUsePolling()) {
+            startQueuePolling();
+        }
     }
 
-    if (panel.dataset.activeBattleId) {
-        loadBattleUi(panel.dataset.activeBattleId);
+    if (activePanel.dataset.activeBattleId) {
+        refreshPvpPanel(activePanel.dataset.activeBattleId);
     }
 
     if (window.Echo && userId) {
@@ -210,12 +312,14 @@ function initMatchmakingPanel() {
                 if (payload.queue_size && queueSizeEl) {
                     queueSizeEl.textContent = payload.queue_size;
                 }
-                setLadderWindow(payload.ladder_window || panel.dataset.ladderWindow);
+                setLadderWindow(payload.ladder_window || activePanel.dataset.ladderWindow);
                 if (payload.message) {
                     setStatus(payload.message);
                 }
             });
+    } else if (shouldUsePolling()) {
+        startQueuePolling();
     }
 }
 
-document.addEventListener('DOMContentLoaded', initMatchmakingPanel);
+document.addEventListener('DOMContentLoaded', () => initMatchmakingPanel());

@@ -61,6 +61,55 @@ class PvpController extends Controller
         ]);
     }
 
+    public function fragment(Request $request)
+    {
+        $user = $request->user();
+        $queueEntry = MatchmakingQueue::where('user_id', $user->id)->first();
+        $activeBattle = Battle::where('status', 'active')
+            ->where(function ($query) use ($user) {
+                $query->where('player1_id', $user->id)->orWhere('player2_id', $user->id);
+            })
+            ->latest('id')
+            ->first();
+        $queueCount = MatchmakingQueue::count();
+
+        if ($activeBattle) {
+            $activeBattle->load(['player1', 'player2', 'winner']);
+
+            return view('pvp._battle_fragment', [
+                'battle' => $activeBattle,
+                'state' => $activeBattle->meta_json,
+                'currentWindow' => $this->matchmaker->windowForEntry($queueEntry),
+            ]);
+        }
+
+        return view('pvp._lobby_fragment', [
+            'queueEntry' => $queueEntry,
+            'searchTimeout' => LiveMatchmaker::SEARCH_TIMEOUT_SECONDS,
+            'currentWindow' => $this->matchmaker->windowForEntry($queueEntry),
+            'queueCount' => $queueCount,
+            'activeBattleId' => $activeBattle?->id,
+        ]);
+    }
+
+    public function status(Request $request)
+    {
+        $user = $request->user();
+        $queueEntry = MatchmakingQueue::where('user_id', $user->id)->first();
+        $activeBattle = Battle::where('status', 'active')
+            ->where(function ($query) use ($user) {
+                $query->where('player1_id', $user->id)->orWhere('player2_id', $user->id);
+            })
+            ->latest('id')
+            ->first();
+
+        return response()->json([
+            'queued' => (bool) $queueEntry,
+            'active_battle_id' => $activeBattle?->id,
+            'current_mode' => $queueEntry?->mode,
+        ]);
+    }
+
     public function queue(Request $request): RedirectResponse
     {
         $data = $request->validate([

@@ -9,10 +9,17 @@
             <p class="text-sm text-gray-600">Active PvP battle</p>
             <p class="text-lg font-semibold">Battle #{{ $battle->id }} is in progress.</p>
         </div>
-        <div class="flex items-center gap-2">
-            <a class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500" href="{{ route('battles.show', $battle) }}">Open standalone</a>
-            <a class="px-3 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-100" href="{{ route('pvp.index') }}">Back to lobby</a>
+        <div class="flex items-center gap-3">
+            @include('partials.live_badge')
+            <div class="flex items-center gap-2">
+                <a class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500" href="{{ route('battles.show', $battle) }}">Open standalone</a>
+                <a class="px-3 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-100" href="{{ route('pvp.index') }}">Back to lobby</a>
+            </div>
         </div>
+    </div>
+
+    <div class="hidden p-3 bg-indigo-50 text-indigo-800 border border-indigo-200 rounded" data-battle-finished-banner>
+        Battle finished! Returning to lobby...
     </div>
 
     @include('battles.partials.battle_interface', ['battle' => $battle, 'state' => $state, 'viewerId' => auth()->id()])

@@ -1,0 +1,35 @@
+# Reverse proxy configuration for Soketi (Pusher protocol compatible)
+# Assumes Soketi is running locally on 127.0.0.1:6001
+# and the Laravel app is served on https://monster.kielsolutions.com
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 443 ssl;
+    server_name monster.kielsolutions.com;
+
+    # SSL configuration omitted for brevity
+
+    location /app {
+        proxy_pass http://127.0.0.1:6001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "$connection_upgrade";
+        proxy_set_header Host $host;
+    }
+
+    location /apps {
+        proxy_pass http://127.0.0.1:6001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "$connection_upgrade";
+        proxy_set_header Host $host;
+    }
+
+    location /metrics {
+        deny all;
+    }
+}

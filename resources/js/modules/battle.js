@@ -177,7 +177,7 @@ export function initBattleLive(root = document) {
     let battleState = initial.state || {};
     let battleStatus = initial.battle?.status || 'active';
     let winnerId = initial.battle?.winner_user_id || null;
-    const players = initial.players || {};
+    let players = initial.players || {};
     const viewerId = Number(initial.viewer_id || container.dataset.userId || 0);
     const battleId = container.dataset.battleId;
     const actUrl = container.dataset.actUrl;
@@ -192,6 +192,9 @@ export function initBattleLive(root = document) {
     const logContainer = container.querySelector('[data-battle-log]');
 
     const opponentId = initial.battle?.player1_id === viewerId ? initial.battle?.player2_id : initial.battle?.player1_id;
+    let pollHandle = null;
+    let hasScheduledCompletion = false;
+    let currentEchoState = window.__echoConnectionState || (window.Echo ? 'connecting' : 'disconnected');
 
     const updateHeader = () => {
         if (statusTextEl) {
@@ -246,6 +249,26 @@ export function initBattleLive(root = document) {
         }
     };
 
+    const scheduleCompletion = () => {
+        if (hasScheduledCompletion || battleStatus === 'active') {
+            return;
+        }
+
+        hasScheduledCompletion = true;
+
+        window.setTimeout(() => {
+            if (window.location.pathname.startsWith('/pvp')) {
+                if (typeof window.refreshPvpPanel === 'function') {
+                    window.refreshPvpPanel();
+                } else {
+                    window.location.href = '/pvp';
+                }
+            } else {
+                window.location.href = '/pvp';
+            }
+        }, 1500);
+    };
+
     const submitAction = (form) => {
         if (!actUrl) {
             return;
@@ -257,6 +280,63 @@ export function initBattleLive(root = document) {
             .post(actUrl, formData)
             .then(() => setStatus('Action sent. Waiting for result...'))
             .catch(() => setStatus('Could not submit action right now.'));
+    };
+
+    const applyUpdate = (payload) => {
+        if (!payload) {
+            return;
+        }
+
+        if (payload.players) {
+            players = payload.players;
+        }
+
+        battleState = payload.state || battleState;
+        battleStatus = payload.status || payload.battle?.status || battleStatus;
+        winnerId = payload.winner_user_id ?? payload.battle?.winner_user_id ?? winnerId;
+        render();
+
+        const isActive = battleStatus === 'active';
+        setStatus(isActive ? 'Live: waiting for next move.' : 'Battle finished.');
+
+        if (!isActive) {
+            scheduleCompletion();
+        }
+    };
+
+    const fetchBattleState = () =>
+        axios
+            .get(`/battles/${battleId}/state`, { headers: { Accept: 'application/json' } })
+            .then((response) => {
+                const data = response.data || {};
+
+                applyUpdate({
+                    state: data.state,
+                    status: data.battle?.status,
+                    winner_user_id: data.battle?.winner_user_id,
+                    players: data.players,
+                });
+            })
+            .catch((error) => {
+                console.error('Battle polling failed', error);
+                setStatus('Unable to sync battle right now.');
+            });
+
+    const stopPolling = () => {
+        if (pollHandle) {
+            clearInterval(pollHandle);
+            pollHandle = null;
+        }
+    };
+
+    const startPolling = () => {
+        if (!battleId || pollHandle) {
+            return;
+        }
+
+        setStatus('Live updates (polling)...');
+        fetchBattleState();
+        pollHandle = window.setInterval(fetchBattleState, 2000);
     };
 
     container.addEventListener('submit', (event) => {
@@ -271,26 +351,34 @@ export function initBattleLive(root = document) {
 
     render();
 
-    if (!window.Echo || !battleId) {
-        setStatus('Live updates unavailable. Actions will appear after refresh.');
-
-        return;
+    if (battleStatus !== 'active') {
+        scheduleCompletion();
     }
 
-    setStatus('Listening for opponent actions...');
+    const shouldPoll = () => !window.Echo || currentEchoState === 'disconnected';
 
-    window.Echo.private(`battles.${battleId}`).listen('.BattleUpdated', (payload) => {
-        if (!payload || !payload.state) {
-            return;
+    if (window.Echo && battleId) {
+        setStatus('Listening for opponent actions...');
+        window.Echo.private(`battles.${battleId}`).listen('.BattleUpdated', (payload) => {
+            applyUpdate(payload);
+        });
+    }
+
+    if (shouldPoll()) {
+        startPolling();
+    }
+
+    window.addEventListener('echo:status', (event) => {
+        const state = event.detail?.state;
+        if (!state) return;
+
+        currentEchoState = state;
+        if (state === 'connected') {
+            stopPolling();
+            setStatus('Listening for opponent actions...');
+        } else if (shouldPoll()) {
+            startPolling();
         }
-
-        battleState = payload.state || battleState;
-        battleStatus = payload.status || battleStatus;
-        winnerId = payload.winner_user_id ?? winnerId;
-        render();
-
-        const isActive = battleStatus === 'active';
-        setStatus(isActive ? 'Live: waiting for next move.' : 'Battle finished.');
     });
 }
 

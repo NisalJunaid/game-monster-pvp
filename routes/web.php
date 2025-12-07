@@ -42,9 +42,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/pvp', [WebPvpController::class, 'index'])->name('pvp.index');
     Route::post('/pvp/queue', [WebPvpController::class, 'queue'])->name('pvp.queue');
     Route::delete('/pvp/queue', [WebPvpController::class, 'dequeue'])->name('pvp.dequeue');
+    Route::get('/pvp/fragment', [WebPvpController::class, 'fragment'])->name('pvp.fragment');
+    Route::get('/pvp/status', [WebPvpController::class, 'status'])->name('pvp.status');
     Route::get('/pvp/battle-fragment/{battle}', [WebPvpController::class, 'battleFragment'])->name('pvp.battle_fragment');
 
     Route::get('/battles/{battle}', [WebBattleController::class, 'show'])->name('battles.show');
+    Route::get('/battles/{battle}/state', [WebBattleController::class, 'state'])->name('battles.state');
     Route::post('/battles/{battle}', [WebBattleController::class, 'act'])->name('battles.act');
 });
 

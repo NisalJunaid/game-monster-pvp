@@ -36,4 +36,23 @@ if (import.meta.env.VITE_PUSHER_APP_KEY) {
         forceTLS: (import.meta.env.VITE_PUSHER_SCHEME ?? 'https') === 'https',
         enabledTransports: ['ws', 'wss'],
     });
+
+    const updateEchoStatus = (state, error = null) => {
+        window.__echoConnectionState = state;
+        window.dispatchEvent(new CustomEvent('echo:status', { detail: { state, error } }));
+        console.info('[echo]', state, error || '');
+    };
+
+    const pusherConnection = window.Echo.connector?.pusher?.connection;
+
+    if (pusherConnection) {
+        updateEchoStatus('connecting');
+
+        pusherConnection.bind('connected', () => updateEchoStatus('connected'));
+        pusherConnection.bind('disconnected', () => updateEchoStatus('disconnected'));
+        pusherConnection.bind('error', (event) => updateEchoStatus('error', event));
+        pusherConnection.bind('state_change', (states) => updateEchoStatus(states.current));
+    }
+} else {
+    window.dispatchEvent(new CustomEvent('echo:status', { detail: { state: 'disconnected', error: null } }));
 }

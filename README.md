@@ -37,6 +37,7 @@ Follow these steps to bring up the live matchmaking flow that the latest change 
    VITE_PUSHER_SCHEME=${PUSHER_SCHEME}
    ```
    These map directly to the Echo bootstrap in `resources/js/bootstrap.js`, which connects via ws/wss using the above host/port/scheme. Set `APP_URL` to the domain you’ll hit from the browser so Echo auth works.
+   For production at `https://monster.kielsolutions.com`, set `PUSHER_HOST=monster.kielsolutions.com`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https` (and matching `VITE_` variables), then rebuild assets with `npm run build` so Vite picks up the new websocket endpoint.
 
 3. **Run database setup** so the matchmaking queue and battle tables exist:
    ```bash
@@ -50,12 +51,13 @@ Follow these steps to bring up the live matchmaking flow that the latest change 
      php artisan websockets:serve --host=0.0.0.0 --port=6001
      ```
    - **Soketi (standalone server)**: run the Docker image alongside the app:
-     ```bash
-     docker run -it --rm -p 6001:6001 \
-       -e DEBUG=1 -e DEFAULT_APP_ID=monster-local \
-       -e DEFAULT_APP_KEY=localkey -e DEFAULT_APP_SECRET=localsecret \
-       quay.io/soketi/soketi:1.0-16-alpine
-     ```
+   ```bash
+   docker run -it --rm -p 6001:6001 \
+     -e DEBUG=1 -e DEFAULT_APP_ID=monster-local \
+     -e DEFAULT_APP_KEY=localkey -e DEFAULT_APP_SECRET=localsecret \
+     quay.io/soketi/soketi:1.0-16-alpine
+   ```
+    An nginx reverse proxy example for Soketi on the production domain lives at `deploy/nginx/soketi.conf.example`.
    - **Laravel Echo Server** remains an option if you already have it installed globally:
      ```bash
      laravel-echo-server init   # set host 0.0.0.0, port 6001, app id/key/secret from .env
