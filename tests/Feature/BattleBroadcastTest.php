@@ -8,6 +8,7 @@ use App\Models\MonsterInstance;
 use App\Models\MonsterSpecies;
 use App\Models\Move;
 use App\Models\User;
+use Illuminate\Broadcasting\PrivateChannel;
 use Database\Seeders\MonsterSpeciesSeeder;
 use Database\Seeders\MoveSeeder;
 use Database\Seeders\TypeEffectivenessSeeder;
@@ -47,9 +48,10 @@ class BattleBroadcastTest extends TestCase
             ])
             ->assertRedirect(route('battles.show', ['battle' => $battleId]));
 
-        Broadcast::assertBroadcasted(BattleUpdated::class, function (BattleUpdated $event) use ($battleId) {
+        Broadcast::assertBroadcasted(BattleUpdated::class, function (BattleUpdated $event, array $channels) use ($battleId) {
             return $event->battleId === $battleId
-                && $event->broadcastAs() === 'BattleUpdated';
+                && $event->broadcastAs() === 'BattleUpdated'
+                && collect($channels)->containsStrict(new PrivateChannel("battles.{$battleId}"));
         });
     }
 

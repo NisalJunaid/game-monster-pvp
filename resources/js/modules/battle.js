@@ -193,6 +193,9 @@ export function initBattleLive(root = document) {
 
     const opponentId = initial.battle?.player1_id === viewerId ? initial.battle?.player2_id : initial.battle?.player1_id;
     let pollHandle = null;
+    let watchdogHandle = null;
+    let awaitingEvent = false;
+    let lastUpdateAt = Date.now();
     let hasScheduledCompletion = false;
     let currentEchoState = window.__echoConnectionState || (window.Echo ? 'connecting' : 'disconnected');
 
@@ -282,9 +285,16 @@ export function initBattleLive(root = document) {
             .catch(() => setStatus('Could not submit action right now.'));
     };
 
-    const applyUpdate = (payload) => {
+    const applyUpdate = (payload, { fromEvent = false } = {}) => {
         if (!payload) {
             return;
+        }
+
+        lastUpdateAt = Date.now();
+
+        if (fromEvent && awaitingEvent) {
+            awaitingEvent = false;
+            stopPolling();
         }
 
         if (payload.players) {
@@ -327,16 +337,37 @@ export function initBattleLive(root = document) {
             clearInterval(pollHandle);
             pollHandle = null;
         }
+
+        awaitingEvent = false;
     };
 
-    const startPolling = () => {
+    const startPolling = ({ expectEvent = false } = {}) => {
         if (!battleId || pollHandle) {
             return;
         }
 
+        awaitingEvent = expectEvent;
         setStatus('Live updates (polling)...');
         fetchBattleState();
         pollHandle = window.setInterval(fetchBattleState, 2000);
+    };
+
+    const startWatchdog = () => {
+        if (watchdogHandle || !battleId) {
+            return;
+        }
+
+        watchdogHandle = window.setInterval(() => {
+            const isEchoConnected = window.Echo && currentEchoState === 'connected';
+
+            if (!isEchoConnected) {
+                return;
+            }
+
+            if (Date.now() - lastUpdateAt > 8000) {
+                startPolling({ expectEvent: true });
+            }
+        }, 3000);
     };
 
     container.addEventListener('submit', (event) => {
@@ -360,13 +391,15 @@ export function initBattleLive(root = document) {
     if (window.Echo && battleId) {
         setStatus('Listening for opponent actions...');
         window.Echo.private(`battles.${battleId}`).listen('.BattleUpdated', (payload) => {
-            applyUpdate(payload);
+            applyUpdate(payload, { fromEvent: true });
         });
     }
 
     if (shouldPoll()) {
         startPolling();
     }
+
+    startWatchdog();
 
     window.addEventListener('echo:status', (event) => {
         const state = event.detail?.state;
