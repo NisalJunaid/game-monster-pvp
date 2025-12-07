@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\MatchmakingQueue;
+use App\Models\PlayerMonster;
 use App\Models\PvpProfile;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -25,6 +26,7 @@ class User extends Authenticatable
         'email',
         'password',
         'is_admin',
+        'has_starter',
     ];
 
     /**
@@ -46,6 +48,7 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'is_admin' => 'boolean',
+        'has_starter' => 'boolean',
     ];
 
     public function pvpProfile(): HasOne
@@ -56,5 +59,10 @@ class User extends Authenticatable
     public function matchmakingQueueEntry(): HasOne
     {
         return $this->hasOne(MatchmakingQueue::class, 'user_id');
+    }
+
+    public function monsters()
+    {
+        return $this->hasMany(PlayerMonster::class);
     }
 }
