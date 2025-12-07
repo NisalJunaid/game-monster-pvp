@@ -6,7 +6,7 @@
      data-user-id="{{ auth()->id() }}"
      data-encounter-url="{{ route('encounters.index') }}"
      data-resolve-template="{{ route('encounters.resolve', ['ticket' => '__ID__']) }}"
-     data-battle-template="{{ route('battles.show', ['battle' => '__BATTLE__']) }}">
+     data-battle-template="{{ route('encounters.battle.show', ['ticket' => '__BATTLE__']) }}">
     <div class="bg-white shadow rounded p-6">
         <div class="flex items-center justify-between mb-2">
             <div>
@@ -57,7 +57,7 @@
                             <p class="font-bold">{{ $encounter->species->name }} (Lv {{ $encounter->rolled_level }})</p>
                             <p class="text-gray-500 text-sm">Zone: {{ $encounter->zone?->name ?? 'Unknown' }}</p>
                         </div>
-                        <a href="{{ route('battles.show', ['battle' => $encounter->id]) }}" class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500">Battle</a>
+                        <a href="{{ route('encounters.battle.show', ['ticket' => $encounter->id]) }}" class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500">Battle</a>
                     </div>
                     @php($percent = $encounter->max_hp ? floor(($encounter->current_hp ?? $encounter->max_hp) / $encounter->max_hp * 100) : 100)
                     <div>

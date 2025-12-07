@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\BattleController as WebBattleController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\EncounterController as WebEncounterController;
+use App\Http\Controllers\Web\WildBattleController as WebWildBattleController;
 use App\Http\Controllers\Web\PvpController as WebPvpController;
 use App\Http\Controllers\Web\StarterController;
 use App\Models\Battle;
@@ -47,6 +48,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/encounters', [WebEncounterController::class, 'index'])->name('encounters.index');
         Route::post('/encounters/location', [WebEncounterController::class, 'update'])->name('encounters.update');
         Route::post('/encounters/{ticket}/resolve', [WebEncounterController::class, 'resolve'])->name('encounters.resolve');
+        Route::get('/encounters/{ticket}/battle', [WebWildBattleController::class, 'show'])->name('encounters.battle.show');
+        Route::post('/encounters/{ticket}/battle/move', [WebWildBattleController::class, 'move'])->name('encounters.battle.move');
+        Route::post('/encounters/{ticket}/battle/switch', [WebWildBattleController::class, 'switchActive'])->name('encounters.battle.switch');
+        Route::post('/encounters/{ticket}/battle/tame', [WebWildBattleController::class, 'tame'])->name('encounters.battle.tame');
+        Route::post('/encounters/{ticket}/battle/run', [WebWildBattleController::class, 'run'])->name('encounters.battle.run');
 
         Route::get('/pvp', [WebPvpController::class, 'index'])->name('pvp.index');
         Route::post('/pvp/queue', [WebPvpController::class, 'queue'])->name('pvp.queue');
