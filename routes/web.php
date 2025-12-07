@@ -9,6 +9,7 @@ use App\Http\Controllers\Web\BattleController as WebBattleController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\EncounterController as WebEncounterController;
 use App\Http\Controllers\Web\PvpController as WebPvpController;
+use App\Http\Controllers\Web\StarterController;
 use App\Models\Battle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -37,65 +38,70 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/starter', [StarterController::class, 'show'])->name('starter.show');
+    Route::post('/starter', [StarterController::class, 'store'])->name('starter.store');
 
-    Route::get('/encounters', [WebEncounterController::class, 'index'])->name('encounters.index');
-    Route::post('/encounters/location', [WebEncounterController::class, 'update'])->name('encounters.update');
-    Route::post('/encounters/{ticket}/resolve', [WebEncounterController::class, 'resolve'])->name('encounters.resolve');
+    Route::middleware('starter.chosen')->group(function () {
+        Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
-    Route::get('/pvp', [WebPvpController::class, 'index'])->name('pvp.index');
-    Route::post('/pvp/queue', [WebPvpController::class, 'queue'])->name('pvp.queue');
-    Route::delete('/pvp/queue', [WebPvpController::class, 'dequeue'])->name('pvp.dequeue');
-    Route::get('/pvp/fragment', [WebPvpController::class, 'fragment'])->name('pvp.fragment');
-    Route::get('/pvp/status', [WebPvpController::class, 'status'])->name('pvp.status');
-    Route::get('/pvp/battle-fragment/{battle}', [WebPvpController::class, 'battleFragment'])->name('pvp.battle_fragment');
+        Route::get('/encounters', [WebEncounterController::class, 'index'])->name('encounters.index');
+        Route::post('/encounters/location', [WebEncounterController::class, 'update'])->name('encounters.update');
+        Route::post('/encounters/{ticket}/resolve', [WebEncounterController::class, 'resolve'])->name('encounters.resolve');
 
-    Route::get('/battles/{battle}', [WebBattleController::class, 'show'])->name('battles.show');
-    Route::get('/battles/{battle}/state', [WebBattleController::class, 'state'])->name('battles.state');
-    Route::post('/battles/{battle}', [WebBattleController::class, 'act'])->name('battles.act');
+        Route::get('/pvp', [WebPvpController::class, 'index'])->name('pvp.index');
+        Route::post('/pvp/queue', [WebPvpController::class, 'queue'])->name('pvp.queue');
+        Route::delete('/pvp/queue', [WebPvpController::class, 'dequeue'])->name('pvp.dequeue');
+        Route::get('/pvp/fragment', [WebPvpController::class, 'fragment'])->name('pvp.fragment');
+        Route::get('/pvp/status', [WebPvpController::class, 'status'])->name('pvp.status');
+        Route::get('/pvp/battle-fragment/{battle}', [WebPvpController::class, 'battleFragment'])->name('pvp.battle_fragment');
 
-    /**
-     * Debug routes (ONLY enabled when APP_DEBUG=true)
-     * Replaces the previous closure-based middleware that breaks optimize:clear.
-     */
-    Route::middleware(['debug.only'])->group(function () {
-        Route::get('/debug/broadcasting', function (Request $request) {
-            return response()->json([
-                'app_url' => config('app.url'),
-                'session_domain' => config('session.domain'),
-                'session_secure' => config('session.secure'),
-                'sanctum_stateful' => config('sanctum.stateful') ?? null,
-                'broadcasting_auth_route' => Route::has('broadcasting.auth'),
-                'broadcasting_default' => config('broadcasting.default'),
-                'pusher' => [
-                    'host' => config('broadcasting.connections.pusher.options.host'),
-                    'port' => config('broadcasting.connections.pusher.options.port'),
-                    'scheme' => config('broadcasting.connections.pusher.options.scheme'),
-                ],
-            ]);
-        })->name('debug.broadcasting');
+        Route::get('/battles/{battle}', [WebBattleController::class, 'show'])->name('battles.show');
+        Route::get('/battles/{battle}/state', [WebBattleController::class, 'state'])->name('battles.state');
+        Route::post('/battles/{battle}', [WebBattleController::class, 'act'])->name('battles.act');
 
-        Route::post('/debug/broadcast-test/{battle}', function (Request $request, Battle $battle) {
-            if (! in_array($request->user()->id, [$battle->player1_id, $battle->player2_id], true)) {
-                abort(Response::HTTP_FORBIDDEN, 'You are not part of this battle.');
-            }
+        /**
+         * Debug routes (ONLY enabled when APP_DEBUG=true)
+         * Replaces the previous closure-based middleware that breaks optimize:clear.
+         */
+        Route::middleware(['debug.only'])->group(function () {
+            Route::get('/debug/broadcasting', function (Request $request) {
+                return response()->json([
+                    'app_url' => config('app.url'),
+                    'session_domain' => config('session.domain'),
+                    'session_secure' => config('session.secure'),
+                    'sanctum_stateful' => config('sanctum.stateful') ?? null,
+                    'broadcasting_auth_route' => Route::has('broadcasting.auth'),
+                    'broadcasting_default' => config('broadcasting.default'),
+                    'pusher' => [
+                        'host' => config('broadcasting.connections.pusher.options.host'),
+                        'port' => config('broadcasting.connections.pusher.options.port'),
+                        'scheme' => config('broadcasting.connections.pusher.options.scheme'),
+                    ],
+                ]);
+            })->name('debug.broadcasting');
 
-            $state = $battle->meta_json;
+            Route::post('/debug/broadcast-test/{battle}', function (Request $request, Battle $battle) {
+                if (! in_array($request->user()->id, [$battle->player1_id, $battle->player2_id], true)) {
+                    abort(Response::HTTP_FORBIDDEN, 'You are not part of this battle.');
+                }
 
-            broadcast(new BattleUpdated(
-                battleId: $battle->id,
-                state: $state,
-                status: $battle->status,
-                nextActorId: $state['next_actor_id'] ?? null,
-                winnerUserId: $battle->winner_user_id,
-            ));
+                $state = $battle->meta_json;
 
-            return response()->json(['ok' => true]);
-        })->name('debug.broadcast_test');
+                broadcast(new BattleUpdated(
+                    battleId: $battle->id,
+                    state: $state,
+                    status: $battle->status,
+                    nextActorId: $state['next_actor_id'] ?? null,
+                    winnerUserId: $battle->winner_user_id,
+                ));
+
+                return response()->json(['ok' => true]);
+            })->name('debug.broadcast_test');
+        });
     });
 });
 
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'starter.chosen', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminController::class, 'index'])->name('index');
     Route::get('/zones/map', [AdminZoneController::class, 'map'])->name('zones.map');
     Route::post('/zones', [AdminZoneController::class, 'store'])->name('zones.store');
