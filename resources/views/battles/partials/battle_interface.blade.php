@@ -39,6 +39,24 @@
      data-winner-id="{{ $battle->winner_user_id }}"
      data-act-url="{{ route('battles.act', $battle) }}"
      data-refresh-url="{{ route('battles.show', $battle) }}">
+
+<script type="application/json" data-battle-initial-state>
+    {!! json_encode([
+        'battle' => [
+            'id' => $battle->id,
+            'status' => $battle->status,
+            'seed' => $battle->seed,
+            'mode' => $state['mode'] ?? 'ranked',
+            'player1_id' => $battle->player1_id,
+            'player2_id' => $battle->player2_id,
+            'winner_user_id' => $battle->winner_user_id,
+        ],
+        'players' => $players,
+        'state' => $state,
+        'viewer_id' => $viewerId,
+    ]) !!}
+</script>
+
     <div class="bg-white shadow rounded-xl p-6">
         <div class="flex items-center justify-between gap-4">
             <div>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Events\BattleUpdated;
 use App\Http\Controllers\Admin\AdminZoneController;
 use App\Http\Controllers\Admin\AdminZoneSpawnController;
 use App\Http\Controllers\Web\AdminController;
@@ -8,7 +9,6 @@ use App\Http\Controllers\Web\BattleController as WebBattleController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\EncounterController as WebEncounterController;
 use App\Http\Controllers\Web\PvpController as WebPvpController;
-use App\Events\BattleUpdated;
 use App\Models\Battle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -54,13 +54,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/battles/{battle}/state', [WebBattleController::class, 'state'])->name('battles.state');
     Route::post('/battles/{battle}', [WebBattleController::class, 'act'])->name('battles.act');
 
-    Route::middleware(function ($request, $next) {
-        if (! config('app.debug')) {
-            abort(Response::HTTP_NOT_FOUND);
-        }
-
-        return $next($request);
-    })->group(function () {
+    /**
+     * Debug routes (ONLY enabled when APP_DEBUG=true)
+     * Replaces the previous closure-based middleware that breaks optimize:clear.
+     */
+    Route::middleware(['debug.only'])->group(function () {
         Route::get('/debug/broadcasting', function (Request $request) {
             return response()->json([
                 'app_url' => config('app.url'),
