@@ -22,6 +22,11 @@ class BattleUpdated implements ShouldBroadcastNow
     ) {
     }
 
+    public function broadcastAs(): string
+    {
+        return 'BattleUpdated';
+    }
+
     public function broadcastOn(): Channel
     {
         return new PrivateChannel('battles.'.$this->battleId);
