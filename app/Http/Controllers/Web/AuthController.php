@@ -26,6 +26,7 @@ class AuthController extends Controller
 
         Auth::login($user);
         session()->regenerate();
+        session()->regenerateToken();
         session(['api_token' => $token]);
 
         return redirect()->route('dashboard')->with('status', 'Welcome to the world of monsters!');
@@ -42,6 +43,7 @@ class AuthController extends Controller
 
         Auth::login($user);
         session()->regenerate();
+        session()->regenerateToken();
         session(['api_token' => $token]);
 
         return redirect()->intended(route('dashboard'))->with('status', 'Logged in successfully.');
