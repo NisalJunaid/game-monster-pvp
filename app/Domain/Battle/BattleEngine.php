@@ -81,24 +81,20 @@ class BattleEngine
 
         if ($this->isAsleep($activeAttacker, $result)) {
             $this->applyResidual($activeAttacker, $result);
-            $state['rng_state'] = $rng->currentState();
-            $state['turn']++;
-            $state['next_actor_id'] = $opponentUserId;
 
-            $this->refreshTurnTimer($state);
+            $opponentFainted = $this->markFainted($activeDefender);
+            $actorFainted = $this->markFainted($activeAttacker);
 
-            return [$state, $result, false, null];
+            return $this->concludeTurn($state, $result, $actorSide, $opponentSide, $actorUserId, $opponentUserId, $rng, $actorFainted, $opponentFainted);
         }
 
         if ($this->isShockedAndImmobilized($activeAttacker, $rng, $result)) {
             $this->applyResidual($activeAttacker, $result);
-            $state['rng_state'] = $rng->currentState();
-            $state['turn']++;
-            $state['next_actor_id'] = $opponentUserId;
 
-            $this->refreshTurnTimer($state);
+            $opponentFainted = $this->markFainted($activeDefender);
+            $actorFainted = $this->markFainted($activeAttacker);
 
-            return [$state, $result, false, null];
+            return $this->concludeTurn($state, $result, $actorSide, $opponentSide, $actorUserId, $opponentUserId, $rng, $actorFainted, $opponentFainted);
         }
 
         if ($action['type'] === 'swap') {
@@ -136,27 +132,41 @@ class BattleEngine
         $opponentFainted = $this->markFainted($activeDefender);
         $actorFainted = $this->markFainted($activeAttacker);
 
+        return $this->concludeTurn($state, $result, $actorSide, $opponentSide, $actorUserId, $opponentUserId, $rng, $actorFainted, $opponentFainted);
+    }
+
+    private function concludeTurn(
+        array $state,
+        array $result,
+        array &$actorSide,
+        array &$opponentSide,
+        int $actorUserId,
+        int $opponentUserId,
+        DeterministicRng $rng,
+        bool $actorFainted,
+        bool $opponentFainted
+    ): array {
         $state['forced_switch_user_id'] = null;
         $state['forced_switch_reason'] = null;
 
-        if ($opponentFainted && $this->hasAvailableMonster($opponentSide)) {
-            $state['forced_switch_user_id'] = $opponentUserId;
-            $state['forced_switch_reason'] = 'fainted';
-        } elseif ($actorFainted && $this->hasAvailableMonster($actorSide)) {
-            $state['forced_switch_user_id'] = $actorUserId;
-            $state['forced_switch_reason'] = 'fainted';
-        }
-
         $hasEnded = $this->checkBattleEnd($actorSide, $opponentSide, $result, $winnerId);
 
-        if ($hasEnded) {
-            $state['forced_switch_user_id'] = null;
-            $state['forced_switch_reason'] = null;
+        if (! $hasEnded) {
+            if ($opponentFainted && $this->hasAvailableMonster($opponentSide)) {
+                $state['forced_switch_user_id'] = $opponentUserId;
+                $state['forced_switch_reason'] = 'fainted';
+            } elseif ($actorFainted && $this->hasAvailableMonster($actorSide)) {
+                $state['forced_switch_user_id'] = $actorUserId;
+                $state['forced_switch_reason'] = 'fainted';
+            }
+
+            $state['next_actor_id'] = $state['forced_switch_user_id'] ?? $opponentUserId;
+        } else {
+            $state['next_actor_id'] = null;
         }
 
         $state['rng_state'] = $rng->currentState();
         $state['turn']++;
-        $state['next_actor_id'] = $state['forced_switch_user_id'] ?? $opponentUserId;
         $state['log'][] = $result;
         $state['participants'][$actorUserId] = $actorSide;
         $state['participants'][$opponentUserId] = $opponentSide;
@@ -460,7 +470,12 @@ class BattleEngine
         $opponentAlive = $this->hasAvailableMonster($opponentSide);
 
         if (! $actorAlive && ! $opponentAlive) {
-            return false;
+            $result['events'][] = [
+                'type' => 'battle_end',
+                'winner_user_id' => null,
+            ];
+
+            return true;
         }
 
         if (! $opponentAlive) {
