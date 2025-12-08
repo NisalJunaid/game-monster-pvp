@@ -31,6 +31,8 @@ class BattleEngine
             'rng_state' => $seed,
             'turn' => 1,
             'next_actor_id' => $player1->id,
+            'forced_switch_user_id' => null,
+            'forced_switch_reason' => null,
             'participants' => [
                 $player1->id => $this->buildParticipant($player1, $player1Party),
                 $player2->id => $this->buildParticipant($player2, $player2Party),
@@ -56,6 +58,11 @@ class BattleEngine
 
         $activeAttacker = & $actorSide['monsters'][$actorSide['active_index']];
         $activeDefender = & $opponentSide['monsters'][$opponentSide['active_index']];
+
+        if (($state['forced_switch_user_id'] ?? null) === $actorUserId && $action['type'] === 'swap') {
+            $state['forced_switch_user_id'] = null;
+            $state['forced_switch_reason'] = null;
+        }
 
         if ($this->isAsleep($activeAttacker, $result)) {
             $this->applyResidual($activeAttacker, $result);
@@ -107,11 +114,30 @@ class BattleEngine
 
         $this->applyResidual($activeAttacker, $result);
 
+        $opponentFainted = $this->markFainted($activeDefender);
+        $actorFainted = $this->markFainted($activeAttacker);
+
+        $state['forced_switch_user_id'] = null;
+        $state['forced_switch_reason'] = null;
+
+        if ($opponentFainted && $this->hasAvailableMonster($opponentSide)) {
+            $state['forced_switch_user_id'] = $opponentUserId;
+            $state['forced_switch_reason'] = 'fainted';
+        } elseif ($actorFainted && $this->hasAvailableMonster($actorSide)) {
+            $state['forced_switch_user_id'] = $actorUserId;
+            $state['forced_switch_reason'] = 'fainted';
+        }
+
         $hasEnded = $this->checkBattleEnd($actorSide, $opponentSide, $result, $winnerId);
+
+        if ($hasEnded) {
+            $state['forced_switch_user_id'] = null;
+            $state['forced_switch_reason'] = null;
+        }
 
         $state['rng_state'] = $rng->currentState();
         $state['turn']++;
-        $state['next_actor_id'] = $opponentUserId;
+        $state['next_actor_id'] = $state['forced_switch_user_id'] ?? $opponentUserId;
         $state['log'][] = $result;
         $state['participants'][$actorUserId] = $actorSide;
         $state['participants'][$opponentUserId] = $opponentSide;
@@ -152,6 +178,7 @@ class BattleEngine
             ],
             'max_hp' => 40,
             'current_hp' => 40,
+            'is_fainted' => false,
             'status' => null,
             'moves' => $this->fallbackMoves(),
         ];
@@ -228,6 +255,7 @@ class BattleEngine
             ],
             'max_hp' => $stage->hp,
             'current_hp' => $stage->hp,
+            'is_fainted' => false,
             'status' => null,
             'moves' => $moves,
         ];
@@ -364,6 +392,14 @@ class BattleEngine
         }
     }
 
+    private function markFainted(array &$monster): bool
+    {
+        $monster['current_hp'] = max(0, $monster['current_hp']);
+        $monster['is_fainted'] = ($monster['current_hp'] ?? 0) <= 0;
+
+        return $monster['is_fainted'];
+    }
+
     private function buildStatus(string $name): array
     {
         return match ($name) {
@@ -408,16 +444,10 @@ class BattleEngine
         return false;
     }
 
-    private function hasAvailableMonster(array &$side): bool
+    private function hasAvailableMonster(array $side): bool
     {
-        if (($side['monsters'][$side['active_index']]['current_hp'] ?? 0) > 0) {
-            return true;
-        }
-
         foreach ($side['monsters'] as $index => $monster) {
             if ($monster['current_hp'] > 0) {
-                $side['active_index'] = $index;
-
                 return true;
             }
         }
