@@ -140,49 +140,56 @@
         </div>
     </div>
 
-    <div class="bg-white shadow rounded-xl p-6 space-y-4" data-battle-commands>
-        <div class="flex items-center justify-between">
-            <h3 class="text-lg font-semibold">Battle commands</h3>
-            <span class="text-sm {{ $isYourTurn ? 'text-emerald-600' : 'text-gray-500' }}" data-turn-indicator>{{ $isYourTurn ? 'Your turn' : 'Waiting for opponent' }}</span>
+    <div class="bg-white shadow rounded-xl p-6 space-y-4 relative" data-battle-commands>
+        <div class="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 text-gray-800 hidden" data-battle-waiting-overlay>
+            <div class="h-10 w-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
+            <p class="text-lg font-semibold">Waiting for opponent...</p>
         </div>
 
-        @if($isYourTurn && $yourActive)
-            <div class="grid md:grid-cols-2 gap-3">
-                @foreach($yourActive['moves'] as $move)
-                    <form method="POST" action="{{ route('battles.act', $battle) }}" data-battle-action-form>
-                        @csrf
-                        <input type="hidden" name="type" value="move">
-                        <input type="hidden" name="slot" value="{{ $move['slot'] }}">
-                        <button class="w-full px-3 py-3 rounded-lg border border-gray-200 hover:border-emerald-400 hover:shadow text-left" data-move-slot="{{ $move['slot'] }}">
-                            <div class="flex items-center justify-between">
-                                <span class="font-semibold">{{ $move['name'] }}</span>
-                                <span class="text-xs uppercase text-gray-500">Slot {{ $move['slot'] }}</span>
-                            </div>
-                            <p class="text-sm text-gray-600">{{ ucfirst($move['category']) }} • {{ $move['type'] ?? 'Neutral' }} • Power {{ $move['power'] }}</p>
-                        </button>
-                    </form>
-                @endforeach
+        <div class="space-y-4" data-battle-commands-body>
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold">Battle commands</h3>
+                <span class="text-sm {{ $isYourTurn ? 'text-emerald-600' : 'text-gray-500' }}" data-turn-indicator>{{ $isYourTurn ? 'Your turn' : 'Waiting for opponent' }}</span>
             </div>
 
-            @if($yourBench->isNotEmpty())
-                <form method="POST" action="{{ route('battles.act', $battle) }}" class="flex items-center gap-2" data-battle-action-form>
-                    @csrf
-                    <input type="hidden" name="type" value="swap">
-                    <select name="monster_instance_id" class="border-gray-300 rounded">
-                        @foreach($yourBench as $monster)
-                            <option value="{{ $monster['id'] }}">Swap to {{ $monster['name'] }} (HP {{ $monster['current_hp'] }})</option>
-                        @endforeach
-                    </select>
-                    <button class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">Swap</button>
-                </form>
+            @if($isYourTurn && $yourActive)
+                <div class="grid md:grid-cols-2 gap-3">
+                    @foreach($yourActive['moves'] as $move)
+                        <form method="POST" action="{{ route('battles.act', $battle) }}" data-battle-action-form>
+                            @csrf
+                            <input type="hidden" name="type" value="move">
+                            <input type="hidden" name="slot" value="{{ $move['slot'] }}">
+                            <button class="w-full px-3 py-3 rounded-lg border border-gray-200 hover:border-emerald-400 hover:shadow text-left" data-move-slot="{{ $move['slot'] }}">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-semibold">{{ $move['name'] }}</span>
+                                    <span class="text-xs uppercase text-gray-500">Slot {{ $move['slot'] }}</span>
+                                </div>
+                                <p class="text-sm text-gray-600">{{ ucfirst($move['category']) }} • {{ $move['type'] ?? 'Neutral' }} • Power {{ $move['power'] }}</p>
+                            </button>
+                        </form>
+                    @endforeach
+                </div>
+
+                @if($yourBench->isNotEmpty())
+                    <form method="POST" action="{{ route('battles.act', $battle) }}" class="flex items-center gap-2" data-battle-action-form>
+                        @csrf
+                        <input type="hidden" name="type" value="swap">
+                        <select name="monster_instance_id" class="border-gray-300 rounded">
+                            @foreach($yourBench as $monster)
+                                <option value="{{ $monster['id'] }}">Swap to {{ $monster['name'] }} (HP {{ $monster['current_hp'] }})</option>
+                            @endforeach
+                        </select>
+                        <button class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">Swap</button>
+                    </form>
+                @else
+                    <p class="text-xs text-gray-500">No reserve monsters available{{ ($yourActive['id'] ?? null) === 0 ? '—using martial arts move set.' : '.' }}</p>
+                @endif
+            @elseif($battle->status === 'active')
+                <p class="text-sm text-gray-600">Waiting for opponent action...</p>
             @else
-                <p class="text-xs text-gray-500">No reserve monsters available{{ ($yourActive['id'] ?? null) === 0 ? '—using martial arts move set.' : '.' }}</p>
+                <p class="text-sm text-gray-600">Battle complete.</p>
             @endif
-        @elseif($battle->status === 'active')
-            <p class="text-sm text-gray-600">Waiting for opponent action...</p>
-        @else
-            <p class="text-sm text-gray-600">Battle complete.</p>
-        @endif
+        </div>
     </div>
 
     <div class="bg-white shadow rounded-xl p-6" data-battle-log>

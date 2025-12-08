@@ -189,7 +189,9 @@ export function initBattleLive(root = document) {
     const yourSideContainer = container.querySelector('[data-side="you"]');
     const opponentSideContainer = container.querySelector('[data-side="opponent"]');
     const commandsContainer = container.querySelector('[data-battle-commands]');
+    const commandsBody = commandsContainer?.querySelector('[data-battle-commands-body]');
     const logContainer = container.querySelector('[data-battle-log]');
+    const waitingOverlay = container.querySelector('[data-battle-waiting-overlay]');
 
     const opponentId = initial.battle?.player1_id === viewerId ? initial.battle?.player2_id : initial.battle?.player1_id;
     let pollHandle = null;
@@ -202,6 +204,7 @@ export function initBattleLive(root = document) {
     let hasScheduledCompletion = false;
     let currentEchoState = window.__echoConnectionState || (window.Echo ? 'connecting' : 'disconnected');
     let initialEventTimeout = null;
+    let waitingForResolution = false;
 
     const updateHeader = () => {
         if (statusTextEl) {
@@ -239,7 +242,9 @@ export function initBattleLive(root = document) {
             opponentSideContainer.innerHTML = '<p class="text-xs uppercase tracking-wide text-gray-500">Opponent</p>' + renderSide(opponentSide, 'opponent');
         }
 
-        if (commandsContainer) {
+        if (commandsBody) {
+            commandsBody.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId);
+        } else if (commandsContainer) {
             commandsContainer.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId);
         }
 
@@ -248,11 +253,32 @@ export function initBattleLive(root = document) {
         }
 
         updateHeader();
+        toggleControls(waitingForResolution);
     };
 
     const setStatus = (message) => {
         if (statusEl) {
             statusEl.textContent = message;
+        }
+    };
+
+    const toggleControls = (disabled) => {
+        const controlsRoot = commandsBody || commandsContainer;
+        if (!controlsRoot) {
+            return;
+        }
+
+        controlsRoot.querySelectorAll('button, select').forEach((control) => {
+            control.disabled = disabled;
+        });
+    };
+
+    const setWaitingState = (waiting) => {
+        waitingForResolution = waiting;
+        toggleControls(waiting);
+
+        if (waitingOverlay) {
+            waitingOverlay.classList.toggle('hidden', !waiting);
         }
     };
 
@@ -286,7 +312,10 @@ export function initBattleLive(root = document) {
         axios
             .post(actUrl, formData)
             .then(() => setStatus('Action sent. Waiting for result...'))
-            .catch(() => setStatus('Could not submit action right now.'));
+            .catch(() => {
+                setStatus('Could not submit action right now.');
+                setWaitingState(false);
+            });
     };
 
     const applyUpdate = (payload, { fromEvent = false } = {}) => {
@@ -321,7 +350,12 @@ export function initBattleLive(root = document) {
         render();
 
         const isActive = battleStatus === 'active';
+        const isYourTurn = isActive && (battleState.next_actor_id ?? null) === viewerId;
         setStatus(isActive ? 'Live: waiting for next move.' : 'Battle finished.');
+
+        if (waitingForResolution && (isYourTurn || !isActive)) {
+            setWaitingState(false);
+        }
 
         if (!isActive) {
             scheduleCompletion();
@@ -397,6 +431,12 @@ export function initBattleLive(root = document) {
         }
 
         event.preventDefault();
+        if (waitingForResolution) {
+            return;
+        }
+
+        setWaitingState(true);
+        setStatus('Submitting action...');
         submitAction(target);
     });
 
