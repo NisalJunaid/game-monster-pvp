@@ -12,7 +12,7 @@ return new class extends Migration {
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE IF EXISTS type_effectivenesses RENAME TO type_effectiveness');
+        DB::statement('ALTER TABLE IF EXISTS type_effectiveness RENAME TO type_effectivenesses');
     }
 };
 
