@@ -56,6 +56,42 @@
                 <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Add entry</button>
             </form>
         </div>
+
+        <div class="bg-white shadow rounded p-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-semibold mb-3">Bulk add spawn entries</h2>
+                <button type="button" id="add-bulk-row" class="px-3 py-1 text-sm bg-gray-200 rounded">+ Add row</button>
+            </div>
+            <p class="text-sm text-gray-600 mb-2">Quickly add several species with their own weights and level ranges.</p>
+            <form method="POST" action="{{ route('admin.zones.spawns.store-bulk', $zone) }}" class="space-y-3" id="bulk-form">
+                @csrf
+                <div class="space-y-2" id="bulk-rows">
+                    <div class="grid md:grid-cols-5 gap-2 bulk-row">
+                        <label class="text-sm font-medium text-gray-700 md:col-span-2">Species
+                            <select name="entries[0][species_id]" class="w-full border rounded px-2 py-1" required>
+                                <option value="">Select a species...</option>
+                                @foreach($species as $s)
+                                    <option value="{{ $s->id }}">#{{ $s->id }} - {{ $s->name }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="text-sm font-medium text-gray-700">Weight
+                            <input type="number" name="entries[0][weight]" value="50" min="1" class="w-full border rounded px-2 py-1" required>
+                        </label>
+                        <label class="text-sm font-medium text-gray-700">Min lvl
+                            <input type="number" name="entries[0][min_level]" value="1" min="1" class="w-full border rounded px-2 py-1" required>
+                        </label>
+                        <label class="text-sm font-medium text-gray-700">Max lvl
+                            <input type="number" name="entries[0][max_level]" value="5" min="1" class="w-full border rounded px-2 py-1" required>
+                        </label>
+                        <label class="text-sm font-medium text-gray-700 md:col-span-3">Rarity tier (optional)
+                            <input type="text" name="entries[0][rarity_tier]" class="w-full border rounded px-2 py-1" placeholder="common">
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" class="px-4 py-2 bg-teal-600 text-white rounded">Save bulk entries</button>
+            </form>
+        </div>
     </div>
 
     <div class="bg-white shadow rounded p-4">
@@ -174,4 +210,32 @@
         </div>
     </div>
 </div>
+<script>
+    const bulkRows = document.getElementById('bulk-rows');
+    const addBulkRowButton = document.getElementById('add-bulk-row');
+
+    if (addBulkRowButton) {
+        addBulkRowButton.addEventListener('click', () => {
+            const currentRows = bulkRows.querySelectorAll('.bulk-row');
+            const index = currentRows.length;
+            const template = currentRows[0].cloneNode(true);
+
+            template.querySelectorAll('input, select').forEach((input) => {
+                const name = input.getAttribute('name') || '';
+                const newName = name.replace(/entries\[\d+\]/, `entries[${index}]`);
+                input.setAttribute('name', newName);
+
+                if (input.tagName === 'INPUT') {
+                    input.value = input.type === 'number' ? input.defaultValue || input.value : '';
+                }
+
+                if (input.tagName === 'SELECT') {
+                    input.selectedIndex = 0;
+                }
+            });
+
+            bulkRows.appendChild(template);
+        });
+    }
+</script>
 @endsection

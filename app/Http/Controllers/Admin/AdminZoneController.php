@@ -32,7 +32,7 @@ class AdminZoneController extends Controller
         $this->fillZoneFromRequest($zone, $request->validated());
         $zone->save();
 
-        $this->refreshSpawnsIfAutomatic($zone);
+        $this->refreshSpawnsIfAutomatic($zone, $request->boolean('generate_spawns'));
 
         return redirect()->route('admin.zones.map')->with('status', 'Zone created.');
     }
@@ -42,7 +42,7 @@ class AdminZoneController extends Controller
         $this->fillZoneFromRequest($zone, $request->validated());
         $zone->save();
 
-        $this->refreshSpawnsIfAutomatic($zone);
+        $this->refreshSpawnsIfAutomatic($zone, $request->boolean('generate_spawns'));
 
         return redirect()->route('admin.zones.map')->with('status', 'Zone updated.');
     }
@@ -238,9 +238,9 @@ class AdminZoneController extends Controller
         return ['lat' => $lat, 'lng' => $lng];
     }
 
-    private function refreshSpawnsIfAutomatic(Zone $zone): void
+    private function refreshSpawnsIfAutomatic(Zone $zone, bool $force = false): void
     {
-        if ($zone->spawn_strategy === 'manual') {
+        if ($zone->spawn_strategy === 'manual' && ! $force) {
             return;
         }
 

@@ -66,6 +66,11 @@
                 </div>
 
                 <div class="field actions">
+                    <input type="checkbox" id="generate_spawns" name="generate_spawns" value="1" checked>
+                    <label for="generate_spawns">Generate a random spawn table on save using preferred types</label>
+                </div>
+
+                <div class="field actions">
                     <input type="checkbox" id="is_active" name="is_active" value="1" checked>
                     <label for="is_active">Active</label>
                 </div>
@@ -232,6 +237,10 @@
         document.getElementById('shape_type').value = zone.shape_type;
         document.getElementById('spawn_strategy').value = zone.spawn_strategy || 'manual';
         setSpawnTypes(zone.spawn_rules?.types || []);
+        const generateSpawnsToggle = document.getElementById('generate_spawns');
+        if (generateSpawnsToggle) {
+            generateSpawnsToggle.checked = false;
+        }
 
         form.action = @json(url('/admin/zones')) + '/' + zone.id;
         document.getElementById('zone-form-method').value = 'PUT';
@@ -250,6 +259,10 @@
         document.getElementById('shape_type').value = 'polygon';
         document.getElementById('shape_json').value = '';
         setSpawnTypes([]);
+        const generateSpawnsToggle = document.getElementById('generate_spawns');
+        if (generateSpawnsToggle) {
+            generateSpawnsToggle.checked = true;
+        }
         activeZoneId = null;
         if (drawnOverlay) {
             drawnOverlay.setMap(null);

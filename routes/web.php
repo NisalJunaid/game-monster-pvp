@@ -119,6 +119,7 @@ Route::middleware(['auth', 'starter.chosen', 'admin'])->prefix('admin')->name('a
 
     Route::get('/zones/{zone}/spawns', [AdminZoneSpawnController::class, 'index'])->name('zones.spawns.index');
     Route::post('/zones/{zone}/spawns', [AdminZoneSpawnController::class, 'store'])->name('zones.spawns.store');
+    Route::post('/zones/{zone}/spawns/bulk', [AdminZoneSpawnController::class, 'storeBulk'])->name('zones.spawns.store-bulk');
     Route::put('/zones/{zone}/spawns/{spawnEntry}', [AdminZoneSpawnController::class, 'update'])->name('zones.spawns.update');
     Route::delete('/zones/{zone}/spawns/{spawnEntry}', [AdminZoneSpawnController::class, 'destroy'])->name('zones.spawns.destroy');
     Route::post('/zones/{zone}/spawns/generate', [AdminZoneSpawnController::class, 'generate'])->name('zones.spawns.generate');

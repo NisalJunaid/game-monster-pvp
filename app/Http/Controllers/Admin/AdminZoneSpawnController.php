@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ZoneSpawnEntryRequest;
+use App\Http\Requests\Admin\ZoneSpawnBulkRequest;
 use App\Http\Requests\Admin\ZoneSpawnGenerateRequest;
 use App\Domain\Encounters\ZoneSpawnGenerator;
 use App\Models\MonsterSpecies;
@@ -34,6 +35,22 @@ class AdminZoneSpawnController extends Controller
         $zone->spawnEntries()->create($request->validated());
 
         return redirect()->route('admin.zones.spawns.index', $zone)->with('status', 'Spawn entry created.');
+    }
+
+    public function storeBulk(ZoneSpawnBulkRequest $request, Zone $zone): RedirectResponse
+    {
+        $entries = collect($request->validated('entries'))
+            ->unique(fn ($entry) => $entry['species_id'])
+            ->map(fn (array $entry) => $entry + ['zone_id' => $zone->id])
+            ->values();
+
+        if ($entries->isNotEmpty()) {
+            $zone->spawnEntries()->createMany($entries->all());
+        }
+
+        return redirect()
+            ->route('admin.zones.spawns.index', $zone)
+            ->with('status', 'Spawn entries added.');
     }
 
     public function update(ZoneSpawnEntryRequest $request, Zone $zone, ZoneSpawnEntry $spawnEntry): RedirectResponse

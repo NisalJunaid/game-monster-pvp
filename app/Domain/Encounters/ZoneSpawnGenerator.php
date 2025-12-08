@@ -107,23 +107,38 @@ class ZoneSpawnGenerator
 
         foreach ($weights as $index => $weight) {
             $raw = ($weight / $total) * 1000;
-            $base = (int) floor($raw);
+            $base = max(1, (int) floor($raw));
             $normalized[$index] = $base;
-            $fractions[$index] = $raw - $base;
+            $fractions[$index] = $raw - floor($raw);
         }
 
         $assigned = array_sum($normalized);
-        $remaining = 1000 - $assigned;
+        $target = 1000;
 
-        arsort($fractions);
+        if ($assigned > $target) {
+            $overage = $assigned - $target;
+            asort($fractions);
 
-        foreach (array_keys($fractions) as $index) {
-            if ($remaining <= 0) {
-                break;
+            foreach (array_keys($fractions) as $index) {
+                while ($overage > 0 && $normalized[$index] > 1) {
+                    $normalized[$index]--;
+                    $overage--;
+                }
             }
+        } elseif ($assigned < $target) {
+            $remaining = $target - $assigned;
+            arsort($fractions);
 
-            $normalized[$index]++;
-            $remaining--;
+            while ($remaining > 0) {
+                foreach (array_keys($fractions) as $index) {
+                    if ($remaining <= 0) {
+                        break;
+                    }
+
+                    $normalized[$index]++;
+                    $remaining--;
+                }
+            }
         }
 
         return $normalized;

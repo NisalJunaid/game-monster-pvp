@@ -23,6 +23,7 @@ class ZoneRequest extends FormRequest
 
         $this->merge([
             'spawn_types' => array_filter((array) $this->input('spawn_types', [])),
+            'generate_spawns' => $this->boolean('generate_spawns', false),
         ]);
     }
 
@@ -37,6 +38,7 @@ class ZoneRequest extends FormRequest
             'spawn_strategy' => ['nullable', 'in:manual,type_weighted,rarity_weighted'],
             'spawn_types' => ['array'],
             'spawn_types.*' => ['integer', 'exists:types,id'],
+            'generate_spawns' => ['sometimes', 'boolean'],
             'shape.path' => ['required_if:shape_type,polygon', 'array', 'min:3'],
             'shape.path.*.lat' => ['required_with:shape.path', 'numeric'],
             'shape.path.*.lng' => ['required_with:shape.path', 'numeric'],
