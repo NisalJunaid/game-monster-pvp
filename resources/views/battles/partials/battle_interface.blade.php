@@ -85,12 +85,6 @@
                         <div class="w-full bg-slate-200 rounded-full h-2.5">
                             <div class="h-2.5 rounded-full bg-rose-400 transition-[width] duration-500 ease-out" data-monster-hp-bar="opponent" style="width: {{ $oppHpPercent }}%"></div>
                         </div>
-                    @else
-                        <p class="text-xs text-gray-600">No active combatant.</p>
-                    @endif
-                </div>
-            </div>
-        </div>
 
         <div class="absolute bottom-6 right-4 max-w-[78%] sm:max-w-xs bg-slate-900/85 backdrop-blur-md border border-slate-800 rounded-2xl px-3 py-2 shadow-lg"
              data-side="you">
@@ -112,12 +106,7 @@
                         <div class="w-full bg-slate-700 rounded-full h-2.5">
                             <div class="h-2.5 rounded-full bg-emerald-400 transition-[width] duration-500 ease-out" data-monster-hp-bar="you" style="width: {{ $hpPercent }}%"></div>
                         </div>
-                    @else
-                        <p class="text-xs text-slate-200/80">No active combatant.</p>
-                    @endif
-                </div>
-            </div>
-        </div>
+                    </div>
 
         <div class="absolute top-[26%] right-6 w-32 sm:w-40 h-7 bg-emerald-900/20 rounded-full shadow-inner"></div>
         <div class="absolute bottom-[24%] left-6 w-32 sm:w-44 h-8 bg-emerald-800/25 rounded-full shadow-inner"></div>
@@ -217,25 +206,43 @@
                     @endforeach
                 </div>
 
-                @if($yourBench->isNotEmpty())
-                    <form method="POST" action="{{ route('battles.act', $battle) }}" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center" data-battle-action-form data-battle-swap-form>
+                <div data-battle-panel="bag" class="hidden">
+                    <p class="text-sm text-slate-200/80">Your bag items will appear here in a future update.</p>
+                </div>
+
+                <div data-battle-panel="tame" class="hidden">
+                    <form method="POST" action="{{ route('battles.act', $battle) }}" data-battle-action-form>
                         @csrf
-                        <input type="hidden" name="type" value="swap">
-                        <select name="monster_instance_id" class="border-slate-700 bg-slate-800 text-white rounded-lg px-2 py-2 text-sm flex-1">
-                            @foreach($yourBench as $monster)
-                                <option value="{{ $monster['id'] }}">Swap to {{ $monster['name'] }} (HP {{ $monster['current_hp'] }})</option>
-                            @endforeach
-                        </select>
-                        <button class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
+                        <input type="hidden" name="type" value="tame">
+                        <button class="w-full px-3 py-3 rounded-xl border border-slate-800 bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Attempt Tame</button>
                     </form>
-                @else
-                    <p class="text-xs text-slate-200/80">No reserve monsters available{{ ($yourActive['id'] ?? null) === 0 ? '—using martial arts move set.' : '.' }}</p>
-                @endif
-            @elseif($battle->status === 'active')
-                <p class="text-sm text-slate-200/80">Waiting for opponent action...</p>
-            @else
-                <p class="text-sm text-slate-200/80">Battle complete.</p>
-            @endif
+                </div>
+
+                <div data-battle-panel="run" class="hidden">
+                    <form method="POST" action="{{ route('battles.act', $battle) }}" data-battle-action-form>
+                        @csrf
+                        <input type="hidden" name="type" value="run">
+                        <button class="w-full px-3 py-3 rounded-xl border border-slate-800 bg-rose-600 text-white font-semibold hover:bg-rose-500 transition-transform duration-150 active:scale-[0.98]">Attempt to Run</button>
+                    </form>
+                </div>
+
+                <div data-battle-panel="switch" class="hidden space-y-2">
+                    @if($yourBench->isNotEmpty())
+                        <form method="POST" action="{{ route('battles.act', $battle) }}" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center" data-battle-action-form data-battle-swap-form>
+                            @csrf
+                            <input type="hidden" name="type" value="swap">
+                            <select name="monster_instance_id" class="border-slate-700 bg-slate-800 text-white rounded-lg px-2 py-2 text-sm flex-1">
+                                @foreach($yourBench as $monster)
+                                    <option value="{{ $monster['id'] }}">Swap to {{ $monster['name'] }} (HP {{ $monster['current_hp'] }})</option>
+                                @endforeach
+                            </select>
+                            <button class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
+                        </form>
+                    @else
+                        <p class="text-xs text-slate-200/80">No reserve monsters available{{ ($yourActive['id'] ?? null) === 0 ? '—using martial arts move set.' : '.' }}</p>
+                    @endif
+                </div>
+            </div>
         </div>
     </div>
 </div>

@@ -195,9 +195,8 @@ export function initBattleLive(root = document) {
     const commandsContainer = container.querySelector('[data-battle-commands]');
     const commandsBody = commandsContainer?.querySelector('[data-battle-commands-body]');
     const lockedHint = commandsContainer?.querySelector('[data-battle-commands-locked-hint]');
-    const logContainer = container.querySelector('[data-battle-log]');
-    const logWrapper = container.querySelector('[data-battle-log-wrapper]');
-    const logToggle = container.querySelector('[data-battle-log-toggle]');
+    const tabButtons = commandsContainer?.querySelectorAll('[data-battle-tab]') || [];
+    const tabPanels = commandsContainer?.querySelector('[data-battle-tab-panels]');
     const waitingOverlay = container.querySelector('[data-battle-waiting-overlay]');
     const waitingMessageEl = waitingOverlay?.querySelector('[data-battle-waiting-message]');
     const timerContainer = container.querySelector('[data-turn-timer]');
@@ -231,37 +230,6 @@ export function initBattleLive(root = document) {
     const defaultWaitingMessage = waitingMessageEl?.textContent?.trim() || 'Waiting for opponent...';
     let toastContainer = null;
 
-    const updateLogButtonState = () => {
-        if (!logToggle || !logWrapper) return;
-
-        const media = window.matchMedia('(min-width: 1024px)');
-        const isHidden = logWrapper.classList.contains('hidden') && !media.matches;
-        const label = logToggle.querySelector('span:last-child');
-        logToggle.setAttribute('aria-expanded', (!isHidden).toString());
-
-        if (label) {
-            label.textContent = isHidden ? 'Show Log' : 'Hide Log';
-        }
-    };
-
-    if (logToggle && logWrapper) {
-        const mq = window.matchMedia('(min-width: 1024px)');
-
-        logToggle.addEventListener('click', () => {
-            logWrapper.classList.toggle('hidden');
-            updateLogButtonState();
-        });
-
-        mq.addEventListener('change', (event) => {
-            if (event.matches) {
-                logWrapper.classList.remove('hidden');
-            }
-            updateLogButtonState();
-        });
-
-        updateLogButtonState();
-    }
-
     const setMenuOpen = (open) => {
         if (menuDrawer) {
             menuDrawer.classList.toggle('translate-x-full', !open);
@@ -285,6 +253,39 @@ export function initBattleLive(root = document) {
     if (menuClose) {
         menuClose.addEventListener('click', () => setMenuOpen(false));
     }
+
+    let activeTab = 'move';
+
+    const setActiveTab = (name, { hideAll = false, fallback = 'move' } = {}) => {
+        if (!tabPanels) return;
+
+        const targetName = hideAll ? null : name || fallback;
+        activeTab = targetName || fallback;
+
+        tabButtons.forEach((button) => {
+            const btnName = button.dataset.battleTab;
+            const isActive = targetName && btnName === targetName;
+            button.classList.toggle('bg-white/10', isActive);
+            button.classList.toggle('bg-white/5', !isActive);
+            button.classList.toggle('border-white/20', isActive);
+        });
+
+        tabPanels.querySelectorAll('[data-battle-panel]').forEach((panel) => {
+            const panelName = panel.dataset.battlePanel;
+            const show = targetName && panelName === targetName;
+            panel.classList.toggle('hidden', !show);
+        });
+    };
+
+    const initTabs = () => {
+        tabButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                setActiveTab(button.dataset.battleTab);
+            });
+        });
+
+        setActiveTab(activeTab);
+    };
 
     const updateWaitingMessage = (message = defaultWaitingMessage) => {
         if (!waitingMessageEl) return;
@@ -326,7 +327,7 @@ export function initBattleLive(root = document) {
     const shouldAllowSwapWhileWaiting = () => {
         const forcedSwitchUserId = battleState?.forced_switch_user_id ?? null;
 
-        return (forcedSwitchUserId !== null && forcedSwitchUserId === viewerId) || (battleState.next_actor_id ?? null) === viewerId;
+        return forcedSwitchUserId !== null && forcedSwitchUserId === viewerId;
     };
 
     const resetTimerUi = () => {
@@ -481,6 +482,78 @@ export function initBattleLive(root = document) {
         }
     };
 
+    const renderMovePanel = (state) => {
+        const participant = state.participants?.[viewerId];
+        const movePanel = tabPanels?.querySelector('[data-battle-panel="move"]');
+        if (!movePanel) return;
+
+        const active = participant?.monsters?.[participant.active_index ?? 0];
+
+        if (!active) {
+            movePanel.innerHTML = '<p class="text-sm text-slate-200/80">No active combatant.</p>';
+            return;
+        }
+
+        movePanel.innerHTML = renderMoves(active.moves || [], actUrl);
+    };
+
+    const renderSwitchPanel = (state) => {
+        const participant = state.participants?.[viewerId];
+        const swapPanel = tabPanels?.querySelector('[data-battle-panel="switch"]');
+        if (!swapPanel) return;
+
+        const bench = (participant?.monsters || []).filter((_, idx) => idx !== (participant?.active_index ?? 0));
+        const active = participant?.monsters?.[participant?.active_index ?? 0];
+
+        if (!bench.length) {
+            swapPanel.innerHTML = `<p class="text-xs text-slate-200/80">No reserve monsters available${(active?.id ?? null) === 0 ? '—using martial arts move set.' : '.'}</p>`;
+            return;
+        }
+
+        const options = bench
+            .map((monster) => `<option value="${monster.id}">Swap to ${escapeHtml(monster.name)} (HP ${monster.current_hp})</option>`)
+            .join('');
+        const csrf = document.head.querySelector('meta[name="csrf-token"]')?.content || '';
+
+        swapPanel.innerHTML = `
+            <form method="POST" action="${escapeHtml(actUrl)}" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center" data-battle-action-form data-battle-swap-form>
+                <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
+                <input type="hidden" name="type" value="swap">
+                <select name="monster_instance_id" class="border-slate-700 bg-slate-800 text-white rounded-lg px-2 py-2 text-sm flex-1">
+                    ${options}
+                </select>
+                <button class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
+            </form>
+        `;
+    };
+
+    const updateTurnIndicator = () => {
+        const indicator = commandsBody?.querySelector('[data-turn-indicator]');
+        const isActive = battleStatus === 'active';
+        const forcedSwitchUserId = battleState?.forced_switch_user_id ?? null;
+        const opponentMustSwap = forcedSwitchUserId !== null && forcedSwitchUserId !== viewerId;
+        const isYourTurn = isActive && (battleState.next_actor_id ?? null) === viewerId && !opponentMustSwap;
+        const isForcedSwap = forcedSwitchUserId !== null && forcedSwitchUserId === viewerId;
+
+        const label = isForcedSwap ? 'Swap required' : isYourTurn ? 'Your turn' : isActive ? 'Waiting for opponent' : 'Battle complete';
+
+        if (indicator) {
+            indicator.textContent = label;
+            indicator.classList.toggle('text-emerald-200', isYourTurn || isForcedSwap);
+            indicator.classList.toggle('text-slate-200/80', !isYourTurn && !isForcedSwap);
+        }
+
+        if (!isActive) {
+            setWaitingState(false);
+        }
+
+        if (isForcedSwap) {
+            setActiveTab('switch');
+        } else if (isYourTurn && !waitingForResolution) {
+            setActiveTab(activeTab || 'move');
+        }
+    };
+
     const updateInteractionState = () => {
         const isActive = battleStatus === 'active';
         const forcedSwitchUserId = battleState?.forced_switch_user_id ?? null;
@@ -490,8 +563,10 @@ export function initBattleLive(root = document) {
 
         if ((!waitingForResolution || waitingReason !== 'resolution') && shouldWaitForTurn) {
             setWaitingState(true, { allowSwap: false, message: 'Waiting for opponent...', reason: 'turn' });
+            setActiveTab(activeTab, { hideAll: true });
         } else if (waitingReason === 'turn' && (!shouldWaitForTurn || !isActive)) {
             setWaitingState(false);
+            setActiveTab(activeTab || 'move');
         }
 
         const controlsLocked = waitingForResolution || shouldWaitForTurn;
@@ -505,17 +580,9 @@ export function initBattleLive(root = document) {
 
         patchHud('you', yourSide);
         patchHud('opponent', opponentSide);
-
-        if (commandsBody) {
-            commandsBody.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId, actUrl);
-        } else if (commandsContainer) {
-            commandsContainer.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId, actUrl);
-        }
-
-        if (logContainer) {
-            logContainer.innerHTML = renderLog(battleState.log || [], players);
-        }
-
+        renderMovePanel({ ...battleState, status: battleStatus });
+        renderSwitchPanel({ ...battleState, status: battleStatus });
+        updateTurnIndicator();
         updateHeader();
         updateInteractionState();
     };
@@ -556,6 +623,12 @@ export function initBattleLive(root = document) {
         resolutionAllowsSwap = allowSwap;
         const canInteractWithSwap = allowSwap && shouldAllowSwapWhileWaiting();
         toggleControls(waiting, { allowSwap: canInteractWithSwap });
+
+        if (waiting && !canInteractWithSwap) {
+            setActiveTab(activeTab, { hideAll: true });
+        } else if (!waiting) {
+            setActiveTab(activeTab || 'move');
+        }
 
         if (waitingOverlay) {
             if (message) {
@@ -739,6 +812,8 @@ export function initBattleLive(root = document) {
             }
         }, 3000);
     };
+
+    initTabs();
 
     container.addEventListener('submit', (event) => {
         const target = event.target;
