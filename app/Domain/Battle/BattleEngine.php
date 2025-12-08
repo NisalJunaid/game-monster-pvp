@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use Symfony\Component\HttpFoundation\Response;
 
 class BattleEngine
 {
@@ -62,6 +63,10 @@ class BattleEngine
         if (($state['forced_switch_user_id'] ?? null) === $actorUserId && $action['type'] === 'swap') {
             $state['forced_switch_user_id'] = null;
             $state['forced_switch_reason'] = null;
+        }
+
+        if ($action['type'] === 'move' && ($activeAttacker['current_hp'] ?? 0) <= 0) {
+            throw new InvalidArgumentException('Fainted monsters can’t act.', Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         if ($this->isAsleep($activeAttacker, $result)) {
@@ -303,8 +308,12 @@ class BattleEngine
     {
         foreach ($participant['monsters'] as $index => $monster) {
             if ($monster['id'] === $targetInstanceId) {
+                if ($index === $participant['active_index']) {
+                    throw new InvalidArgumentException('Monster is already active.', Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
+
                 if ($monster['current_hp'] <= 0) {
-                    throw new InvalidArgumentException('Cannot switch to a fainted monster.');
+                    throw new InvalidArgumentException('Cannot switch to a fainted monster.', Response::HTTP_UNPROCESSABLE_ENTITY);
                 }
 
                 $participant['active_index'] = $index;
@@ -313,7 +322,7 @@ class BattleEngine
             }
         }
 
-        throw new InvalidArgumentException('Monster not found on your team.');
+        throw new InvalidArgumentException('Monster not found on your team.', Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     private function findMoveBySlot(array $monster, int $slot): array
