@@ -143,7 +143,7 @@
     <div class="bg-white shadow rounded-xl p-6 space-y-4 relative" data-battle-commands>
         <div class="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 text-gray-800 hidden" data-battle-waiting-overlay>
             <div class="h-10 w-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
-            <p class="text-lg font-semibold">Waiting for opponent...</p>
+            <p class="text-lg font-semibold" data-battle-waiting-message>Waiting for opponent...</p>
         </div>
 
         <div class="space-y-4" data-battle-commands-body>
@@ -171,7 +171,7 @@
                 </div>
 
                 @if($yourBench->isNotEmpty())
-                    <form method="POST" action="{{ route('battles.act', $battle) }}" class="flex items-center gap-2" data-battle-action-form>
+                    <form method="POST" action="{{ route('battles.act', $battle) }}" class="flex items-center gap-2" data-battle-action-form data-battle-swap-form>
                         @csrf
                         <input type="hidden" name="type" value="swap">
                         <select name="monster_instance_id" class="border-gray-300 rounded">

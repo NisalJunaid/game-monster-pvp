@@ -53,11 +53,11 @@ const renderSide = (side, role) => {
     `;
 };
 
-const renderMoves = (moves = []) => {
+const renderMoves = (moves = [], actUrl = '') => {
     return moves
         .map(
             (move) => `
-                <form method="POST" data-battle-action-form>
+                <form method="POST" action="${escapeHtml(actUrl)}" data-battle-action-form>
                     <input type="hidden" name="_token" value="${escapeHtml(document.head.querySelector('meta[name="csrf-token"]')?.content || '')}" />
                     <input type="hidden" name="type" value="move">
                     <input type="hidden" name="slot" value="${move.slot}">
@@ -74,7 +74,7 @@ const renderMoves = (moves = []) => {
         .join('');
 };
 
-const renderCommands = (state, viewerId) => {
+const renderCommands = (state, viewerId, actUrl = '') => {
     const participant = state.participants?.[viewerId];
     const isActive = (state?.status || 'active') === 'active';
     const isYourTurn = isActive && (state.next_actor_id ?? null) === viewerId;
@@ -111,11 +111,11 @@ const renderCommands = (state, viewerId) => {
 
     const moveButtons = isForcedSwap
         ? '<p class="text-sm text-amber-600">Your active monster fainted. Choose a replacement to continue.</p>'
-        : renderMoves(active.moves || []);
+        : renderMoves(active.moves || [], actUrl);
     const csrf = document.head.querySelector('meta[name="csrf-token"]')?.content || '';
     const swapSection = bench.length
         ? `
-            <form method="POST" class="flex items-center gap-2" data-battle-action-form>
+            <form method="POST" action="${escapeHtml(actUrl)}" class="flex items-center gap-2" data-battle-action-form data-battle-swap-form>
                 <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
                 <input type="hidden" name="type" value="swap">
                 <select name="monster_instance_id" class="border-gray-300 rounded">
@@ -207,6 +207,7 @@ export function initBattleLive(root = document) {
     const commandsBody = commandsContainer?.querySelector('[data-battle-commands-body]');
     const logContainer = container.querySelector('[data-battle-log]');
     const waitingOverlay = container.querySelector('[data-battle-waiting-overlay]');
+    const waitingMessageEl = waitingOverlay?.querySelector('[data-battle-waiting-message]');
 
     const opponentId = initial.battle?.player1_id === viewerId ? initial.battle?.player2_id : initial.battle?.player1_id;
     let pollHandle = null;
@@ -220,6 +221,19 @@ export function initBattleLive(root = document) {
     let currentEchoState = window.__echoConnectionState || (window.Echo ? 'connecting' : 'disconnected');
     let initialEventTimeout = null;
     let waitingForResolution = false;
+    const defaultWaitingMessage = waitingMessageEl?.textContent?.trim() || 'Waiting for opponent...';
+
+    const updateWaitingMessage = (message = defaultWaitingMessage) => {
+        if (!waitingMessageEl) return;
+
+        waitingMessageEl.textContent = message;
+    };
+
+    const shouldAllowSwapWhileWaiting = () => {
+        const forcedSwitchUserId = battleState?.forced_switch_user_id ?? null;
+
+        return (forcedSwitchUserId !== null && forcedSwitchUserId === viewerId) || (battleState.next_actor_id ?? null) === viewerId;
+    };
 
     const updateHeader = () => {
         if (statusTextEl) {
@@ -258,9 +272,9 @@ export function initBattleLive(root = document) {
         }
 
         if (commandsBody) {
-            commandsBody.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId);
+            commandsBody.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId, actUrl);
         } else if (commandsContainer) {
-            commandsContainer.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId);
+            commandsContainer.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId, actUrl);
         }
 
         if (logContainer) {
@@ -268,7 +282,7 @@ export function initBattleLive(root = document) {
         }
 
         updateHeader();
-        toggleControls(waitingForResolution);
+        toggleControls(waitingForResolution, { allowSwap: waitingForResolution && shouldAllowSwapWhileWaiting() });
     };
 
     const setStatus = (message) => {
@@ -277,23 +291,34 @@ export function initBattleLive(root = document) {
         }
     };
 
-    const toggleControls = (disabled) => {
+    const toggleControls = (disabled, { allowSwap = false } = {}) => {
         const controlsRoot = commandsBody || commandsContainer;
         if (!controlsRoot) {
             return;
         }
 
         controlsRoot.querySelectorAll('button, select').forEach((control) => {
-            control.disabled = disabled;
+            const isSwapControl = Boolean(control.closest('[data-battle-swap-form]'));
+            const shouldDisable = disabled && !(allowSwap && isSwapControl);
+            control.disabled = shouldDisable;
         });
     };
 
-    const setWaitingState = (waiting) => {
+    const setWaitingState = (waiting, { allowSwap = false, message } = {}) => {
         waitingForResolution = waiting;
-        toggleControls(waiting);
+        const canInteractWithSwap = allowSwap && shouldAllowSwapWhileWaiting();
+        toggleControls(waiting, { allowSwap: canInteractWithSwap });
 
         if (waitingOverlay) {
-            waitingOverlay.classList.toggle('hidden', !waiting);
+            if (message) {
+                updateWaitingMessage(message);
+            }
+            const showOverlay = waiting && !canInteractWithSwap;
+            waitingOverlay.classList.toggle('hidden', !showOverlay);
+        }
+
+        if (!waiting) {
+            updateWaitingMessage(defaultWaitingMessage);
         }
     };
 
@@ -327,8 +352,11 @@ export function initBattleLive(root = document) {
         axios
             .post(actUrl, formData)
             .then(() => setStatus('Action sent. Waiting for result...'))
-            .catch(() => {
-                setStatus('Could not submit action right now.');
+            .catch((error) => {
+                const isValidationError = error?.response?.status === 422;
+                const message = error?.response?.data?.message || (isValidationError ? 'Invalid action. Please try again.' : 'Could not submit action right now.');
+
+                setStatus(message);
                 setWaitingState(false);
             });
     };
@@ -366,9 +394,10 @@ export function initBattleLive(root = document) {
 
         const isActive = battleStatus === 'active';
         const isYourTurn = isActive && (battleState.next_actor_id ?? null) === viewerId;
+        const isForcedSwap = isActive && shouldAllowSwapWhileWaiting();
         setStatus(isActive ? 'Live: waiting for next move.' : 'Battle finished.');
 
-        if (waitingForResolution && (isYourTurn || !isActive)) {
+        if (waitingForResolution && (isYourTurn || isForcedSwap || !isActive)) {
             setWaitingState(false);
         }
 
@@ -446,12 +475,16 @@ export function initBattleLive(root = document) {
         }
 
         event.preventDefault();
-        if (waitingForResolution) {
+        const isSwapForm = target.matches('[data-battle-swap-form]') || Boolean(target.querySelector('input[name="type"][value="swap"]'));
+        const allowSwapWhileWaiting = shouldAllowSwapWhileWaiting();
+
+        if (waitingForResolution && !(allowSwapWhileWaiting && isSwapForm)) {
             return;
         }
 
-        setWaitingState(true);
-        setStatus('Submitting action...');
+        const waitingMessage = isSwapForm ? 'Switching...' : 'Submitting action...';
+        setWaitingState(true, { allowSwap: false, message: waitingMessage });
+        setStatus(waitingMessage);
         submitAction(target);
     });
 
