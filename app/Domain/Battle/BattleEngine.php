@@ -9,6 +9,7 @@ use App\Models\TypeEffectiveness;
 use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,11 +22,13 @@ class BattleEngine
 
     public function __construct()
     {
-        $this->typeChart = TypeEffectiveness::query()
-            ->get()
-            ->groupBy('attack_type_id')
-            ->map(fn (Collection $group) => $group->keyBy('defend_type_id')->map->multiplier)
-            ->toArray();
+        $this->typeChart = Schema::hasTable('type_effectivenesses')
+            ? TypeEffectiveness::query()
+                ->get()
+                ->groupBy('attack_type_id')
+                ->map(fn (Collection $group) => $group->keyBy('defend_type_id')->map->multiplier)
+                ->toArray()
+            : [];
     }
 
     public function initialize(User $player1, User $player2, Collection $player1Party, Collection $player2Party, int $seed): array
