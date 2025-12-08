@@ -42,7 +42,13 @@
      data-refresh-url="{{ route('battles.show', $battle) }}">
     <div class="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.55),_transparent_55%)]"></div>
 
-    <div class="relative flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-6">
+    <div class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 text-slate-900 opacity-0 scale-95 pointer-events-none transition duration-200 ease-out"
+         data-battle-waiting-overlay>
+        <div class="h-12 w-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
+        <p class="text-lg font-semibold" data-battle-waiting-message>Waiting for opponent...</p>
+    </div>
+
+    <div class="relative flex-1 overflow-hidden px-3 pt-10 pb-2">
         <div class="absolute top-3 left-4 flex items-center gap-2 text-xs text-slate-600">
             @include('partials.live_badge')
             <span data-battle-live-status>Connecting to live battle feed...</span>
@@ -54,70 +60,80 @@
             <span class="i-mdi-menu text-xl text-slate-800"></span>
         </button>
 
-        <div class="absolute top-4 left-4 max-w-[78%] sm:max-w-xs bg-white/80 backdrop-blur-md border border-white/60 rounded-xl px-3 py-2 shadow"
-             data-side="opponent">
-            <p class="text-[10px] uppercase tracking-wide text-slate-500">Opponent</p>
-            <div class="flex items-start justify-between gap-3">
-                <div class="space-y-1">
-                    <p class="text-lg font-semibold text-slate-900" data-monster-name="opponent">{{ $opponentActive['name'] ?? 'No fighter' }}</p>
-                    <p class="text-[11px] text-slate-500 opacity-60" data-monster-types="opponent">Types: {{ implode(', ', $opponentActive['type_names'] ?? []) ?: 'Neutral' }}</p>
-                    <p class="text-xs text-amber-700 {{ $opponentActive && $opponentActive['status'] ? '' : 'hidden' }}" data-monster-status="opponent">
-                        @if($opponentActive && $opponentActive['status'])
-                            Status: {{ ucfirst($opponentActive['status']['name']) }}
-                        @endif
-                    </p>
-                </div>
-                <div class="w-32 sm:w-40" data-monster-hp-container="opponent">
-                    @if($opponentActive)
-                        @php($oppHpPercent = max(0, min(100, (int) floor(($opponentActive['current_hp'] / max(1, $opponentActive['max_hp'])) * 100))))
-                        <div class="text-right text-[11px] text-slate-600" data-monster-hp-text="opponent">HP {{ $opponentActive['current_hp'] }} / {{ $opponentActive['max_hp'] }}</div>
-                        <div class="w-full bg-slate-200 rounded-full h-2.5">
-                            <div class="h-2.5 rounded-full bg-rose-400 transition-[width] duration-500 ease-out" data-monster-hp-bar="opponent" style="width: {{ $oppHpPercent }}%"></div>
+        <div class="relative h-full w-full flex flex-col">
+            <div class="flex-1 flex flex-col">
+                <div class="flex-1 flex flex-col justify-between">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="max-w-[70%] sm:max-w-xs bg-white/80 backdrop-blur-md border border-white/60 rounded-xl px-3 py-2 shadow" data-side="opponent">
+                            <p class="text-[10px] uppercase tracking-wide text-slate-500">Opponent</p>
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="space-y-1">
+                                    <p class="text-lg font-semibold text-slate-900" data-monster-name="opponent">{{ $opponentActive['name'] ?? 'No fighter' }}</p>
+                                    <p class="text-[11px] text-slate-500 opacity-60" data-monster-types="opponent">Types: {{ implode(', ', $opponentActive['type_names'] ?? []) ?: 'Neutral' }}</p>
+                                    <p class="text-xs text-amber-700 {{ $opponentActive && $opponentActive['status'] ? '' : 'hidden' }}" data-monster-status="opponent">
+                                        @if($opponentActive && $opponentActive['status'])
+                                            Status: {{ ucfirst($opponentActive['status']['name']) }}
+                                        @endif
+                                    </p>
+                                </div>
+                                <div class="w-28 sm:w-40" data-monster-hp-container="opponent">
+                                    @if($opponentActive)
+                                        @php($oppHpPercent = max(0, min(100, (int) floor(($opponentActive['current_hp'] / max(1, $opponentActive['max_hp'])) * 100))))
+                                        <div class="text-right text-[11px] text-slate-600" data-monster-hp-text="opponent">HP {{ $opponentActive['current_hp'] }} / {{ $opponentActive['max_hp'] }}</div>
+                                        <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                            <div class="h-2.5 rounded-full bg-rose-400 transition-[width] duration-500 ease-out" data-monster-hp-bar="opponent" style="width: {{ $oppHpPercent }}%"></div>
+                                        </div>
+                                    @else
+                                        <p class="text-xs text-gray-600">No active combatant.</p>
+                                    @endif
+                                </div>
+                            </div>
                         </div>
-                    @else
-                        <p class="text-xs text-gray-600">No active combatant.</p>
-                    @endif
+
+                        <div class="relative w-32 h-32 sm:w-40 sm:h-40 flex items-center justify-center">
+                            <div class="absolute inset-0 rounded-full bg-white/50 blur-3xl"></div>
+                            <div class="relative h-28 w-28 sm:h-32 sm:w-32 rounded-full bg-gradient-to-br from-slate-200 to-emerald-100 border border-white/70 shadow-inner flex items-center justify-center text-slate-800 font-semibold text-sm">
+                                Opponent
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="relative w-32 h-32 sm:w-40 sm:h-40 flex items-center justify-center order-2">
+                            <div class="absolute inset-0 rounded-full bg-emerald-200/70 blur-3xl"></div>
+                            <div class="relative h-28 w-28 sm:h-32 sm:w-32 rounded-full bg-gradient-to-br from-emerald-200 to-emerald-100 border border-emerald-50 shadow-inner flex items-center justify-center text-emerald-900 font-semibold text-sm">
+                                You
+                            </div>
+                        </div>
+
+                        <div class="max-w-[70%] sm:max-w-xs bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-3 py-2 shadow-lg order-1" data-side="you">
+                            <p class="text-[10px] uppercase tracking-wide text-emerald-200">You</p>
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="space-y-1">
+                                    <p class="text-lg font-semibold text-white" data-monster-name="you">{{ $yourActive['name'] ?? 'No fighter' }}</p>
+                                    <p class="text-[11px] text-slate-300/80 opacity-60" data-monster-types="you">Types: {{ implode(', ', $yourActive['type_names'] ?? []) ?: 'Neutral' }}</p>
+                                    <p class="text-xs text-amber-200 {{ $yourActive && $yourActive['status'] ? '' : 'hidden' }}" data-monster-status="you">
+                                        @if($yourActive && $yourActive['status'])
+                                            Status: {{ ucfirst($yourActive['status']['name']) }}
+                                        @endif
+                                    </p>
+                                </div>
+                                <div class="w-28 sm:w-40" data-monster-hp-container="you">
+                                    @if($yourActive)
+                                        @php($hpPercent = max(0, min(100, (int) floor(($yourActive['current_hp'] / max(1, $yourActive['max_hp'])) * 100))))
+                                        <div class="text-right text-[11px] text-slate-200/80" data-monster-hp-text="you">HP {{ $yourActive['current_hp'] }} / {{ $yourActive['max_hp'] }}</div>
+                                        <div class="w-full bg-slate-700 rounded-full h-2.5">
+                                            <div class="h-2.5 rounded-full bg-emerald-400 transition-[width] duration-500 ease-out" data-monster-hp-bar="you" style="width: {{ $hpPercent }}%"></div>
+                                        </div>
+                                    @else
+                                        <p class="text-xs text-slate-200/80">No active combatant.</p>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <div class="absolute bottom-6 right-4 max-w-[78%] sm:max-w-xs bg-slate-900/85 backdrop-blur-md border border-slate-800 rounded-xl px-3 py-2 shadow-lg"
-             data-side="you">
-            <p class="text-[10px] uppercase tracking-wide text-emerald-200">You</p>
-            <div class="flex items-start justify-between gap-3">
-                <div class="space-y-1">
-                    <p class="text-lg font-semibold text-white" data-monster-name="you">{{ $yourActive['name'] ?? 'No fighter' }}</p>
-                    <p class="text-[11px] text-slate-300/80 opacity-60" data-monster-types="you">Types: {{ implode(', ', $yourActive['type_names'] ?? []) ?: 'Neutral' }}</p>
-                    <p class="text-xs text-amber-200 {{ $yourActive && $yourActive['status'] ? '' : 'hidden' }}" data-monster-status="you">
-                        @if($yourActive && $yourActive['status'])
-                            Status: {{ ucfirst($yourActive['status']['name']) }}
-                        @endif
-                    </p>
-                </div>
-                <div class="w-32 sm:w-40" data-monster-hp-container="you">
-                    @if($yourActive)
-                        @php($hpPercent = max(0, min(100, (int) floor(($yourActive['current_hp'] / max(1, $yourActive['max_hp'])) * 100))))
-                        <div class="text-right text-[11px] text-slate-200/80" data-monster-hp-text="you">HP {{ $yourActive['current_hp'] }} / {{ $yourActive['max_hp'] }}</div>
-                        <div class="w-full bg-slate-700 rounded-full h-2.5">
-                            <div class="h-2.5 rounded-full bg-emerald-400 transition-[width] duration-500 ease-out" data-monster-hp-bar="you" style="width: {{ $hpPercent }}%"></div>
-                        </div>
-                    @else
-                        <p class="text-xs text-slate-200/80">No active combatant.</p>
-                    @endif
-                </div>
-            </div>
-        </div>
-
-        <div class="absolute top-[26%] right-6 w-32 sm:w-40 h-6 bg-emerald-900/15 rounded-full shadow-inner"></div>
-        <div class="absolute bottom-[24%] left-6 w-32 sm:w-44 h-7 bg-emerald-800/20 rounded-full shadow-inner"></div>
-
-        <div class="absolute top-[16%] right-8 h-28 w-28 sm:h-32 sm:w-32 bg-white/70 border border-white/70 rounded-full shadow-lg flex items-center justify-center text-sm text-slate-600"
-             data-sprite="opponent">
-            Opponent
-        </div>
-        <div class="absolute bottom-[18%] left-8 h-28 w-28 sm:h-32 sm:w-32 bg-slate-900/80 border border-slate-800 rounded-full shadow-lg flex items-center justify-center text-sm text-emerald-100"
-             data-sprite="you">
-            You
         </div>
     </div>
 
@@ -152,16 +168,11 @@
         </div>
     </div>
 
-    <div class="relative z-10 bg-slate-900 text-white rounded-t-3xl px-4 py-4 sm:px-6 sm:py-5 border-t border-slate-800 shadow-xl shrink-0" data-battle-commands>
-        <div class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/90 opacity-0 scale-95 pointer-events-none transition duration-200 ease-out" data-battle-waiting-overlay>
-            <div class="h-10 w-10 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
-            <p class="text-lg font-semibold" data-battle-waiting-message>Waiting for opponent...</p>
-        </div>
-
+    <div class="relative z-10 bg-slate-900 text-white rounded-t-3xl px-3 py-3 sm:px-5 sm:py-4 border-t border-slate-800 shadow-xl shrink-0 max-h-[38svh] overflow-hidden" data-battle-commands>
         <div class="space-y-3" data-battle-commands-body>
             <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-2">
-                    <h3 class="text-lg font-semibold">Choose an action</h3>
+                    <h3 class="text-base font-semibold">Choose an action</h3>
                     <span class="text-xs text-emerald-200 rounded-full border border-emerald-400/60 px-2 py-0.5 hidden" data-battle-commands-locked-hint>Locked</span>
                 </div>
                 <span class="text-sm {{ $isYourTurn ? 'text-emerald-200' : 'text-slate-200/80' }}" data-turn-indicator>{{ $isYourTurn ? 'Your turn' : 'Waiting for opponent' }}</span>
@@ -185,43 +196,73 @@
                 </p>
             </div>
 
-            @if($isYourTurn && $yourActive)
-                <div class="grid grid-cols-2 gap-3">
-                    @foreach($yourActive['moves'] as $move)
-                        <form method="POST" action="{{ route('battles.act', $battle) }}" data-battle-action-form>
-                            @csrf
-                            <input type="hidden" name="type" value="move">
-                            <input type="hidden" name="slot" value="{{ $move['slot'] }}">
-                            <button class="w-full h-full min-h-[64px] sm:min-h-[84px] lg:min-h-[92px] px-3 py-3 rounded-xl border border-slate-800 bg-gradient-to-br from-slate-800/80 to-slate-900/80 hover:border-emerald-300 hover:bg-emerald-300/10 hover:shadow-md text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="{{ $move['slot'] }}">
-                                <div class="flex items-center justify-between gap-2">
-                                    <span class="font-semibold">{{ $move['name'] }}</span>
-                                    <span class="text-[11px] uppercase text-slate-200/80">Slot {{ $move['slot'] }}</span>
-                                </div>
-                                <p class="text-sm text-slate-200/80">{{ ucfirst($move['category']) }} • {{ $move['type'] ?? 'Neutral' }} • Power {{ $move['power'] }}</p>
-                            </button>
-                        </form>
-                    @endforeach
+            <div class="flex items-center gap-2 overflow-x-auto pb-1" data-battle-command-tabs>
+                <button type="button" class="px-3 py-2 rounded-xl bg-white/10 border border-white/10 text-sm font-semibold transition active:scale-[0.98]" data-battle-tab="move">Move</button>
+                <button type="button" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold transition active:scale-[0.98]" data-battle-tab="bag">Bag</button>
+                <button type="button" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold transition active:scale-[0.98]" data-battle-tab="tame">Tame</button>
+                <button type="button" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold transition active:scale-[0.98]" data-battle-tab="run">Run</button>
+                <button type="button" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold transition active:scale-[0.98]" data-battle-tab="switch">Switch</button>
+            </div>
+
+            <div class="relative overflow-y-auto pr-1 space-y-3" data-battle-tab-panels>
+                <div data-battle-panel="move" class="grid grid-cols-2 gap-2">
+                    @if($yourActive)
+                        @foreach($yourActive['moves'] as $move)
+                            <form method="POST" action="{{ route('battles.act', $battle) }}" data-battle-action-form>
+                                @csrf
+                                <input type="hidden" name="type" value="move">
+                                <input type="hidden" name="slot" value="{{ $move['slot'] }}">
+                                <button class="w-full h-full min-h-[64px] px-3 py-3 rounded-xl border border-slate-800 bg-gradient-to-br from-slate-800/80 to-slate-900/80 hover:border-emerald-300 hover:bg-emerald-300/10 hover:shadow-md text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="{{ $move['slot'] }}">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-semibold">{{ $move['name'] }}</span>
+                                        <span class="text-[11px] uppercase text-slate-200/80">Slot {{ $move['slot'] }}</span>
+                                    </div>
+                                    <p class="text-sm text-slate-200/80">{{ ucfirst($move['category']) }} • {{ $move['type'] ?? 'Neutral' }} • Power {{ $move['power'] }}</p>
+                                </button>
+                            </form>
+                        @endforeach
+                    @else
+                        <p class="text-sm text-slate-200/80">No active combatant.</p>
+                    @endif
                 </div>
 
-                @if($yourBench->isNotEmpty())
-                    <form method="POST" action="{{ route('battles.act', $battle) }}" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center" data-battle-action-form data-battle-swap-form>
+                <div data-battle-panel="bag" class="hidden">
+                    <p class="text-sm text-slate-200/80">Your bag items will appear here in a future update.</p>
+                </div>
+
+                <div data-battle-panel="tame" class="hidden">
+                    <form method="POST" action="{{ route('battles.act', $battle) }}" data-battle-action-form>
                         @csrf
-                        <input type="hidden" name="type" value="swap">
-                        <select name="monster_instance_id" class="border-slate-700 bg-slate-800 text-white rounded-lg px-2 py-2 text-sm flex-1">
-                            @foreach($yourBench as $monster)
-                                <option value="{{ $monster['id'] }}">Swap to {{ $monster['name'] }} (HP {{ $monster['current_hp'] }})</option>
-                            @endforeach
-                        </select>
-                        <button class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
+                        <input type="hidden" name="type" value="tame">
+                        <button class="w-full px-3 py-3 rounded-xl border border-slate-800 bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Attempt Tame</button>
                     </form>
-                @else
-                    <p class="text-xs text-slate-200/80">No reserve monsters available{{ ($yourActive['id'] ?? null) === 0 ? '—using martial arts move set.' : '.' }}</p>
-                @endif
-            @elseif($battle->status === 'active')
-                <p class="text-sm text-slate-200/80">Waiting for opponent action...</p>
-            @else
-                <p class="text-sm text-slate-200/80">Battle complete.</p>
-            @endif
+                </div>
+
+                <div data-battle-panel="run" class="hidden">
+                    <form method="POST" action="{{ route('battles.act', $battle) }}" data-battle-action-form>
+                        @csrf
+                        <input type="hidden" name="type" value="run">
+                        <button class="w-full px-3 py-3 rounded-xl border border-slate-800 bg-rose-600 text-white font-semibold hover:bg-rose-500 transition-transform duration-150 active:scale-[0.98]">Attempt to Run</button>
+                    </form>
+                </div>
+
+                <div data-battle-panel="switch" class="hidden space-y-2">
+                    @if($yourBench->isNotEmpty())
+                        <form method="POST" action="{{ route('battles.act', $battle) }}" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center" data-battle-action-form data-battle-swap-form>
+                            @csrf
+                            <input type="hidden" name="type" value="swap">
+                            <select name="monster_instance_id" class="border-slate-700 bg-slate-800 text-white rounded-lg px-2 py-2 text-sm flex-1">
+                                @foreach($yourBench as $monster)
+                                    <option value="{{ $monster['id'] }}">Swap to {{ $monster['name'] }} (HP {{ $monster['current_hp'] }})</option>
+                                @endforeach
+                            </select>
+                            <button class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
+                        </form>
+                    @else
+                        <p class="text-xs text-slate-200/80">No reserve monsters available{{ ($yourActive['id'] ?? null) === 0 ? '—using martial arts move set.' : '.' }}</p>
+                    @endif
+                </div>
+            </div>
         </div>
     </div>
 </div>
