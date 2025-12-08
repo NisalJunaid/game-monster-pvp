@@ -64,6 +64,12 @@ class BattleController extends Controller
         }
 
         $meta = $battle->meta_json;
+        $actorSide = $meta['participants'][$actor->id] ?? null;
+        $actorActiveMonster = $actorSide['monsters'][$actorSide['active_index'] ?? null] ?? null;
+
+        if (($actorActiveMonster['current_hp'] ?? 0) <= 0 && $request->input('type') !== 'swap') {
+            abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'Fainted monsters can’t act.');
+        }
 
         if (($meta['forced_switch_user_id'] ?? null) !== null) {
             if (($meta['forced_switch_user_id'] ?? null) !== $actor->id) {
@@ -82,7 +88,7 @@ class BattleController extends Controller
         try {
             [$state, $result, $hasEnded, $winnerId] = $this->engine->applyAction($battle, $actor->id, $request->validated());
         } catch (\InvalidArgumentException $exception) {
-            abort(Response::HTTP_BAD_REQUEST, $exception->getMessage());
+            abort($exception->getCode() ?: Response::HTTP_BAD_REQUEST, $exception->getMessage());
         }
 
         $battle->update([
