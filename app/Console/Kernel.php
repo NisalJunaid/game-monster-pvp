@@ -13,6 +13,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         $schedule->command('pvp:process-queue')->everyMinute();
+        $schedule->command('pvp:resolve-expired-turns')->everyFiveSeconds();
     }
 
     /**
