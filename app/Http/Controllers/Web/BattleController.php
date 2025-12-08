@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers\Web;
 
-use App\Domain\Battle\BattleEngine;
+use App\Domain\Battle\BattleActionService;
 use App\Domain\Pvp\PvpRankingService;
-use App\Events\BattleUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BattleActionRequest;
 use App\Models\Battle;
-use App\Models\BattleTurn;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -16,7 +14,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class BattleController extends Controller
 {
-    public function __construct(private readonly BattleEngine $engine, private readonly PvpRankingService $rankingService)
+    public function __construct(
+        private readonly BattleActionService $actionService,
+        private readonly PvpRankingService $rankingService,
+    )
     {
     }
 
@@ -82,37 +83,19 @@ class BattleController extends Controller
         }
 
         try {
-            [$state, $result, $hasEnded, $winnerId] = $this->engine->applyAction($battle, $actor->id, $request->validated());
+            $outcome = $this->actionService->handleAction($battle, $actor, $request->validated());
+            $state = $outcome['state'];
+            $result = $outcome['result'];
+            $hasEnded = $outcome['hasEnded'];
+            $winnerId = $outcome['winnerId'];
+            $battle = $outcome['battle'];
         } catch (InvalidArgumentException $exception) {
             return back()->withErrors(['action' => $exception->getMessage()]);
         }
 
-        $battle->update([
-            'meta_json' => $state,
-            'status' => $hasEnded ? 'completed' : 'active',
-            'winner_user_id' => $winnerId,
-            'ended_at' => $hasEnded ? now() : null,
-        ]);
-
-        BattleTurn::query()->create([
-            'battle_id' => $battle->id,
-            'turn_number' => $result['turn'],
-            'actor_user_id' => $actor->id,
-            'action_json' => $request->validated(),
-            'result_json' => $result,
-        ]);
-
         if ($hasEnded && $winnerId !== null) {
             $this->rankingService->handleBattleCompletion($battle->fresh());
         }
-
-        broadcast(new BattleUpdated(
-            battleId: $battle->id,
-            state: $state,
-            status: $hasEnded ? 'completed' : 'active',
-            nextActorId: $state['next_actor_id'] ?? null,
-            winnerUserId: $winnerId,
-        ));
 
         return redirect()->route('battles.show', $battle)->with('status', 'Action submitted.');
     }
