@@ -65,6 +65,16 @@ class BattleController extends Controller
 
         $meta = $battle->meta_json;
 
+        if (($meta['forced_switch_user_id'] ?? null) !== null) {
+            if (($meta['forced_switch_user_id'] ?? null) !== $actor->id) {
+                abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'Waiting for opponent to swap.');
+            }
+
+            if ($request->input('type') !== 'swap') {
+                abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'You must swap to continue.');
+            }
+        }
+
         if (($meta['next_actor_id'] ?? null) !== $actor->id) {
             abort(Response::HTTP_BAD_REQUEST, 'It is not your turn.');
         }

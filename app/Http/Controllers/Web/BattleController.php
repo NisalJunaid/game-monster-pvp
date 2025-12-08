@@ -67,6 +67,16 @@ class BattleController extends Controller
 
         $meta = $battle->meta_json;
 
+        if (($meta['forced_switch_user_id'] ?? null) !== null) {
+            if (($meta['forced_switch_user_id'] ?? null) !== $actor->id) {
+                return back()->withErrors(['action' => 'Waiting for opponent to swap.']);
+            }
+
+            if ($request->input('type') !== 'swap') {
+                return back()->withErrors(['action' => 'You must swap to continue.']);
+            }
+        }
+
         if (($meta['next_actor_id'] ?? null) !== $actor->id) {
             return back()->withErrors(['battle' => 'It is not your turn yet.']);
         }

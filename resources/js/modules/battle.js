@@ -78,10 +78,19 @@ const renderCommands = (state, viewerId) => {
     const participant = state.participants?.[viewerId];
     const isActive = (state?.status || 'active') === 'active';
     const isYourTurn = isActive && (state.next_actor_id ?? null) === viewerId;
+    const forcedSwitchUserId = state?.forced_switch_user_id ?? null;
+    const isForcedSwap = forcedSwitchUserId !== null && forcedSwitchUserId === viewerId;
+    const opponentMustSwap = forcedSwitchUserId !== null && forcedSwitchUserId !== viewerId;
     const active = participant?.monsters?.[participant.active_index ?? 0];
     const bench = (participant?.monsters || []).filter((_, idx) => idx !== (participant?.active_index ?? 0));
 
-    const turnLabel = isYourTurn ? 'Your turn' : isActive ? 'Waiting for opponent' : 'Battle complete';
+    const turnLabel = isForcedSwap
+        ? 'Swap required'
+        : isYourTurn
+            ? 'Your turn'
+            : isActive
+                ? 'Waiting for opponent'
+                : 'Battle complete';
     const turnColor = isYourTurn ? 'text-emerald-600' : 'text-gray-500';
 
     if (!participant) {
@@ -92,11 +101,17 @@ const renderCommands = (state, viewerId) => {
         return `<div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Battle commands</h3><span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span></div><p class="text-sm text-gray-600">Battle complete.</p>`;
     }
 
+    if (opponentMustSwap) {
+        return `<div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Battle commands</h3><span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span></div><p class="text-sm text-gray-600">Waiting for opponent to swap.</p>`;
+    }
+
     if (!isYourTurn || !active) {
         return `<div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Battle commands</h3><span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span></div><p class="text-sm text-gray-600">Waiting for opponent action...</p>`;
     }
 
-    const moveButtons = renderMoves(active.moves || []);
+    const moveButtons = isForcedSwap
+        ? '<p class="text-sm text-amber-600">Your active monster fainted. Choose a replacement to continue.</p>'
+        : renderMoves(active.moves || []);
     const csrf = document.head.querySelector('meta[name="csrf-token"]')?.content || '';
     const swapSection = bench.length
         ? `

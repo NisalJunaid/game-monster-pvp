@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\MonsterInstance;
 use App\Models\MonsterSpecies;
 use App\Models\Move;
+use App\Models\Battle;
 use App\Models\User;
 use Database\Seeders\MonsterSpeciesSeeder;
 use Database\Seeders\MoveSeeder;
@@ -123,6 +124,51 @@ class MonsterBattleTest extends TestCase
         }
 
         $this->fail('Battle did not complete within expected number of turns');
+    }
+
+    public function test_forced_switch_required_after_faint(): void
+    {
+        [$player, $opponent, $tokenPlayer, $tokenOpponent] = $this->buildPlayers();
+        $this->spawnMonster($player, 'Water', ['Water Jet']);
+        $opponentBench = $this->spawnMonster($opponent, 'Fire', ['Ember']);
+
+        [$battleId] = $this->startBattle($player, $opponent, $tokenPlayer, $tokenOpponent, 2024);
+
+        $battle = Battle::findOrFail($battleId);
+        $meta = $battle->meta_json;
+        $meta['participants'][$opponent->id]['monsters'][0]['current_hp'] = 1;
+        $battle->update(['meta_json' => $meta]);
+
+        $response = $this->withToken($tokenPlayer)->postJson("/api/battles/{$battleId}/act", ['type' => 'move', 'slot' => 1]);
+        $response->assertOk();
+
+        $state = $response->json('data.meta');
+
+        $this->assertEquals($opponent->id, $state['forced_switch_user_id']);
+        $this->assertEquals($opponent->id, $state['next_actor_id']);
+        $this->assertSame(0, $state['participants'][$opponent->id]['monsters'][0]['current_hp']);
+        $this->assertTrue($state['participants'][$opponent->id]['monsters'][0]['is_fainted']);
+
+        $this->withToken($tokenPlayer)
+            ->postJson("/api/battles/{$battleId}/act", ['type' => 'move', 'slot' => 1])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Waiting for opponent to swap.');
+
+        $this->withToken($tokenOpponent)
+            ->postJson("/api/battles/{$battleId}/act", ['type' => 'move', 'slot' => 1])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'You must swap to continue.');
+
+        $swapResponse = $this->withToken($tokenOpponent)->postJson("/api/battles/{$battleId}/act", [
+            'type' => 'swap',
+            'monster_instance_id' => $opponentBench->id,
+        ]);
+
+        $swapResponse->assertOk();
+        $swapState = $swapResponse->json('data.meta');
+
+        $this->assertNull($swapState['forced_switch_user_id']);
+        $this->assertEquals($player->id, $swapState['next_actor_id']);
     }
 
     private function buildPlayers(string $playerType = 'Water', string $opponentType = 'Fire'): array
