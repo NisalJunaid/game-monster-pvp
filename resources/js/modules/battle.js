@@ -32,45 +32,6 @@ const formatTypes = (monster) => {
     return types.length ? types.join(', ') : 'Neutral';
 };
 
-const renderSide = (side, role) => {
-    if (!side) {
-        return `<p class="text-sm text-gray-500">No combatant available.</p>`;
-    }
-
-    const active = side.monsters?.[side.active_index ?? 0];
-    const bench = (side.monsters || []).filter((_, idx) => idx !== (side.active_index ?? 0));
-    const hp = hpPercent(active);
-    const hpText = active ? `HP ${active.current_hp} / ${active.max_hp}` : 'HP 0 / 0';
-    const status = active?.status?.name ? `Status: ${escapeHtml(active.status.name)}` : '';
-    const statusClass = role === 'you' ? 'text-amber-300' : 'text-amber-700';
-    const typeText = active ? formatTypes(active) : 'Neutral';
-    const nameClass = role === 'you' ? '' : 'text-gray-900';
-    const labelClass = role === 'you' ? 'text-slate-300' : 'text-gray-600';
-    const bgBar = role === 'you' ? 'bg-emerald-400' : 'bg-rose-400';
-    const barTrack = role === 'you' ? 'bg-slate-700' : 'bg-gray-200';
-
-    return `
-        <div class="flex items-center justify-between gap-3">
-            <div>
-                <h2 class="text-xl font-semibold ${nameClass}" data-monster-name="${role}">${escapeHtml(active?.name || 'No fighter')}</h2>
-                <p class="text-sm ${labelClass}" data-monster-types="${role}">Types: ${escapeHtml(typeText)}</p>
-                <p class="text-sm ${statusClass} ${active?.status ? '' : 'hidden'}" data-monster-status="${role}">${escapeHtml(status)}</p>
-            </div>
-            <div class="w-40 sm:w-48" data-monster-hp-container="${role}">
-                <div class="text-right text-xs ${labelClass}" data-monster-hp-text="${role}">${escapeHtml(hpText)}</div>
-                <div class="w-full ${barTrack} rounded-full h-3">
-                    <div class="h-3 rounded-full ${bgBar} transition-[width] duration-500 ease-out" data-monster-hp-bar="${role}" style="width: ${hp}%"></div>
-                </div>
-            </div>
-        </div>
-        <div class="mt-3 flex flex-wrap gap-2 text-xs" data-bench-list="${role}">
-            ${bench
-                .map((monster) => `<span class="px-2 py-1 rounded-full ${role === 'you' ? 'bg-slate-800 border border-slate-700' : 'bg-gray-200 border border-gray-300'}">${escapeHtml(monster.name)} (HP ${monster.current_hp})</span>`)
-                .join('')}
-        </div>
-    `;
-};
-
 const renderMoves = (moves = [], actUrl = '') => {
     return moves
         .map(
@@ -79,7 +40,7 @@ const renderMoves = (moves = [], actUrl = '') => {
                     <input type="hidden" name="_token" value="${escapeHtml(document.head.querySelector('meta[name="csrf-token"]')?.content || '')}" />
                     <input type="hidden" name="type" value="move">
                     <input type="hidden" name="slot" value="${move.slot}">
-                    <button class="w-full h-full min-h-[84px] px-3 py-3 rounded-lg border border-slate-700/60 bg-white/10 hover:border-emerald-300 hover:bg-emerald-300/10 hover:shadow-md text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="${move.slot}">
+                    <button class="w-full h-full min-h-[64px] sm:min-h-[84px] lg:min-h-[92px] px-3 py-3 rounded-xl border border-slate-800 bg-gradient-to-br from-slate-800/80 to-slate-900/80 hover:border-emerald-300 hover:bg-emerald-300/10 hover:shadow-md text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="${move.slot}">
                         <div class="flex items-center justify-between gap-2">
                             <span class="font-semibold">${escapeHtml(move.name)}</span>
                             <span class="text-[11px] uppercase text-slate-200/80">Slot ${move.slot}</span>
@@ -111,7 +72,7 @@ const renderCommands = (state, viewerId, actUrl = '') => {
                 : 'Battle complete';
     const turnColor = isYourTurn ? 'text-emerald-200' : 'text-slate-200/80';
     const header = `
-        <div class="flex items-center justify-between gap-3">\n            <div class="flex items-center gap-2">\n                <h3 class="text-lg font-semibold">Battle commands</h3>\n                <span class="text-xs text-emerald-200 rounded-full border border-emerald-400/60 px-2 py-0.5 hidden" data-battle-commands-locked-hint>Locked</span>\n            </div>\n            <span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span>\n        </div>
+        <div class="flex items-center justify-between gap-3">\n            <div class="flex items-center gap-2">\n                <h3 class="text-lg font-semibold">Choose an action</h3>\n                <span class="text-xs text-emerald-200 rounded-full border border-emerald-400/60 px-2 py-0.5 hidden" data-battle-commands-locked-hint>Locked</span>\n            </div>\n            <span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span>\n        </div>
     `;
 
     const timer = `
@@ -142,10 +103,10 @@ const renderCommands = (state, viewerId, actUrl = '') => {
         ? `
             <form method="POST" action="${escapeHtml(actUrl)}" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center" data-battle-action-form data-battle-swap-form>
                 <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
-                <input type="hidden" name="type" value="swap">\n                <select name="monster_instance_id" class="border-gray-300 rounded px-2 py-2 text-gray-900 flex-1">\n                    ${bench
+                <input type="hidden" name="type" value="swap">\n                <select name="monster_instance_id" class="border-slate-700 bg-slate-800 text-white rounded-lg px-2 py-2 text-sm flex-1">\n                    ${bench
                         .map((monster) => `<option value=\"${monster.id}\">Swap to ${escapeHtml(monster.name)} (HP ${monster.current_hp})</option>`)
                         .join('')}\n                </select>
-                <button class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
+                <button class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
             </form>
         `
         : `<p class="text-xs text-slate-200/80">No reserve monsters available${(active.id ?? null) === 0 ? '—using martial arts move set.' : '.'}</p>`;
@@ -235,6 +196,10 @@ export function initBattleLive(root = document) {
     const timerBar = timerContainer?.querySelector('[data-turn-timer-bar]');
     const timerExpiredText = timerContainer?.querySelector('[data-turn-timer-expired]');
     const timerLabel = timerContainer?.querySelector('[data-turn-timer-label]');
+    const menuButton = container.querySelector('[data-battle-menu-button]');
+    const menuDrawer = container.querySelector('[data-battle-menu-drawer]');
+    const menuBackdrop = container.querySelector('[data-battle-menu-backdrop]');
+    const menuClose = container.querySelector('[data-battle-menu-close]');
 
     const opponentId = initial.battle?.player1_id === viewerId ? initial.battle?.player2_id : initial.battle?.player1_id;
     let pollHandle = null;
@@ -248,6 +213,8 @@ export function initBattleLive(root = document) {
     let currentEchoState = window.__echoConnectionState || (window.Echo ? 'connecting' : 'disconnected');
     let initialEventTimeout = null;
     let waitingForResolution = false;
+    let waitingReason = null;
+    let resolutionAllowsSwap = false;
     let timerHandle = null;
     let timerEndsAtMs = null;
     let timerDurationMs = null;
@@ -285,6 +252,30 @@ export function initBattleLive(root = document) {
         });
 
         updateLogButtonState();
+    }
+
+    const setMenuOpen = (open) => {
+        if (menuDrawer) {
+            menuDrawer.classList.toggle('translate-x-full', !open);
+        }
+
+        if (menuBackdrop) {
+            menuBackdrop.classList.toggle('opacity-0', !open);
+            menuBackdrop.classList.toggle('opacity-100', open);
+            menuBackdrop.classList.toggle('pointer-events-none', !open);
+        }
+    };
+
+    if (menuButton) {
+        menuButton.addEventListener('click', () => setMenuOpen(true));
+    }
+
+    if (menuBackdrop) {
+        menuBackdrop.addEventListener('click', () => setMenuOpen(false));
+    }
+
+    if (menuClose) {
+        menuClose.addEventListener('click', () => setMenuOpen(false));
     }
 
     const updateWaitingMessage = (message = defaultWaitingMessage) => {
@@ -447,17 +438,65 @@ export function initBattleLive(root = document) {
         }
     };
 
+    const patchHud = (role, side) => {
+        const active = side?.monsters?.[side.active_index ?? 0];
+        const nameEl = container.querySelector(`[data-monster-name="${role}"]`);
+        const typesEl = container.querySelector(`[data-monster-types="${role}"]`);
+        const statusEl = container.querySelector(`[data-monster-status="${role}"]`);
+        const hpTextEl = container.querySelector(`[data-monster-hp-text="${role}"]`);
+        const hpBarEl = container.querySelector(`[data-monster-hp-bar="${role}"]`);
+
+        const typeText = active ? formatTypes(active) : 'Neutral';
+        const hpText = active ? `HP ${active.current_hp} / ${active.max_hp}` : 'HP 0 / 0';
+        const statusText = active?.status?.name ? `Status: ${active.status.name}` : '';
+        const hp = hpPercent(active);
+
+        if (nameEl) {
+            nameEl.textContent = active?.name || 'No fighter';
+        }
+
+        if (typesEl) {
+            typesEl.textContent = `Types: ${typeText}`;
+        }
+
+        if (statusEl) {
+            statusEl.textContent = statusText;
+            statusEl.classList.toggle('hidden', !active?.status?.name);
+        }
+
+        if (hpTextEl) {
+            hpTextEl.textContent = hpText;
+        }
+
+        if (hpBarEl) {
+            hpBarEl.style.width = `${hp}%`;
+        }
+    };
+
+    const updateInteractionState = () => {
+        const isActive = battleStatus === 'active';
+        const forcedSwitchUserId = battleState?.forced_switch_user_id ?? null;
+        const opponentMustSwap = forcedSwitchUserId !== null && forcedSwitchUserId !== viewerId;
+        const isYourTurn = isActive && (battleState.next_actor_id ?? null) === viewerId && !opponentMustSwap;
+        const shouldWaitForTurn = isActive && !isYourTurn && !shouldAllowSwapWhileWaiting();
+
+        if ((!waitingForResolution || waitingReason !== 'resolution') && shouldWaitForTurn) {
+            setWaitingState(true, { allowSwap: false, message: 'Waiting for opponent...', reason: 'turn' });
+        } else if (waitingReason === 'turn' && (!shouldWaitForTurn || !isActive)) {
+            setWaitingState(false);
+        }
+
+        const controlsLocked = waitingForResolution || shouldWaitForTurn;
+        const allowSwap = waitingReason === 'resolution' ? resolutionAllowsSwap && shouldAllowSwapWhileWaiting() : false;
+        toggleControls(controlsLocked, { allowSwap });
+    };
+
     const render = () => {
         const yourSide = battleState.participants?.[viewerId];
         const opponentSide = opponentId ? battleState.participants?.[opponentId] : null;
 
-        if (yourSideContainer) {
-            yourSideContainer.innerHTML = '<p class="text-xs uppercase tracking-wide text-slate-300">You</p>' + renderSide(yourSide, 'you');
-        }
-
-        if (opponentSideContainer) {
-            opponentSideContainer.innerHTML = '<p class="text-xs uppercase tracking-wide text-gray-500">Opponent</p>' + renderSide(opponentSide, 'opponent');
-        }
+        patchHud('you', yourSide);
+        patchHud('opponent', opponentSide);
 
         if (commandsBody) {
             commandsBody.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId, actUrl);
@@ -470,7 +509,7 @@ export function initBattleLive(root = document) {
         }
 
         updateHeader();
-        toggleControls(waitingForResolution, { allowSwap: waitingForResolution && shouldAllowSwapWhileWaiting() });
+        updateInteractionState();
     };
 
     const setStatus = (message) => {
@@ -503,8 +542,10 @@ export function initBattleLive(root = document) {
         }
     };
 
-    const setWaitingState = (waiting, { allowSwap = false, message } = {}) => {
+    const setWaitingState = (waiting, { allowSwap = false, message, reason = 'resolution' } = {}) => {
         waitingForResolution = waiting;
+        waitingReason = waiting ? reason : null;
+        resolutionAllowsSwap = allowSwap;
         const canInteractWithSwap = allowSwap && shouldAllowSwapWhileWaiting();
         toggleControls(waiting, { allowSwap: canInteractWithSwap });
 
@@ -620,7 +661,7 @@ export function initBattleLive(root = document) {
         const isForcedSwap = isActive && shouldAllowSwapWhileWaiting();
         setStatus(isActive ? 'Live: waiting for next move.' : 'Battle finished.');
 
-        if (waitingForResolution && (isYourTurn || isForcedSwap || !isActive)) {
+        if (waitingForResolution && waitingReason === 'resolution' && (isYourTurn || isForcedSwap || !isActive)) {
             setWaitingState(false);
         }
 
@@ -705,8 +746,8 @@ export function initBattleLive(root = document) {
             return;
         }
 
-        const waitingMessage = isSwapForm ? 'Switching...' : 'Submitting action...';
-        setWaitingState(true, { allowSwap: false, message: waitingMessage });
+        const waitingMessage = isSwapForm ? 'Switching...' : 'Resolving...';
+        setWaitingState(true, { allowSwap: false, message: waitingMessage, reason: 'resolution' });
         setStatus(waitingMessage);
         submitAction(target);
     });
