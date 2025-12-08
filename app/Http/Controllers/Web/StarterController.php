@@ -9,13 +9,16 @@ use App\Models\Type;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use Illuminate\Validation\Rule;
 
 class StarterController extends Controller
 {
     public function show(): View
     {
-        $types = Type::orderBy('name')->get();
+        $starterTypeIds = $this->starterTypeIds();
+        $types = Type::whereIn('id', $starterTypeIds)->orderBy('name')->get();
 
         return view('starter', [
             'types' => $types,
@@ -30,16 +33,21 @@ class StarterController extends Controller
             return redirect()->route('dashboard');
         }
 
+        $starterTypeIds = $this->starterTypeIds();
+
         $validated = $request->validate([
-            'type_id' => ['required', 'exists:types,id'],
+            'type_id' => ['required', Rule::in($starterTypeIds)],
         ]);
 
         $starterStage = MonsterSpeciesStage::query()
             ->with('species')
             ->where('stage_number', 1)
             ->whereHas('species', function ($query) use ($validated) {
-                $query->where('primary_type_id', $validated['type_id'])
-                    ->orWhere('secondary_type_id', $validated['type_id']);
+                $query->where('rarity_tier', 'starter')
+                    ->where(function ($typeQuery) use ($validated) {
+                        $typeQuery->where('primary_type_id', $validated['type_id'])
+                            ->orWhere('secondary_type_id', $validated['type_id']);
+                    });
             })
             ->inRandomOrder()
             ->first();
@@ -65,5 +73,22 @@ class StarterController extends Controller
         });
 
         return redirect()->route('dashboard')->with('status', 'Your starter has joined your party!');
+    }
+
+    private function starterTypeIds(): Collection
+    {
+        return MonsterSpeciesStage::query()
+            ->with('species')
+            ->where('stage_number', 1)
+            ->whereHas('species', fn ($query) => $query->where('rarity_tier', 'starter'))
+            ->get()
+            ->flatMap(function (MonsterSpeciesStage $stage) {
+                return array_filter([
+                    $stage->species?->primary_type_id,
+                    $stage->species?->secondary_type_id,
+                ]);
+            })
+            ->unique()
+            ->values();
     }
 }

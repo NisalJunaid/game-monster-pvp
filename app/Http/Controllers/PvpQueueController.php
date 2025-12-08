@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Pvp\LiveMatchmaker;
 use App\Domain\Pvp\PvpRankingService;
 use App\Models\MatchmakingQueue;
 use Illuminate\Http\JsonResponse;
@@ -10,7 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PvpQueueController extends Controller
 {
-    public function __construct(private readonly PvpRankingService $rankingService)
+    public function __construct(
+        private readonly PvpRankingService $rankingService,
+        private readonly LiveMatchmaker $matchmaker,
+    )
     {
     }
 
@@ -21,6 +25,10 @@ class PvpQueueController extends Controller
         ]);
 
         $user = $request->user();
+
+        if ($data['mode'] === 'ranked' && ! $this->matchmaker->hasFullTeam($user)) {
+            abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'Ranked requires a full team of 6 monsters.');
+        }
 
         $this->rankingService->ensureProfile($user->id);
 

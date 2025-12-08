@@ -8,6 +8,7 @@ use App\Domain\Pvp\PvpRankingService;
 use App\Http\Requests\BattleActionRequest;
 use App\Http\Requests\ChallengeBattleRequest;
 use App\Models\Battle;
+use App\Models\BattleTurn;
 use App\Models\MonsterInstance;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
