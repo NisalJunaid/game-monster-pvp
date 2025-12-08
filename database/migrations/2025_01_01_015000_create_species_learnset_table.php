@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('species_learnset', function (Blueprint $table) {
+        Schema::create('species_learnsets', function (Blueprint $table) {
             $table->id();
             $table->foreignId('species_id')->constrained('monster_species')->cascadeOnDelete();
             $table->unsignedTinyInteger('stage_number');
@@ -24,5 +24,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('species_learnset');
+        Schema::dropIfExists('species_learnsets');
     }
 };
