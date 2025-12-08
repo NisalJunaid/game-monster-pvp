@@ -32,6 +32,17 @@
     ]) !!}
 </script>
 
+<style>
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-6px);
+    }
+}
+</style>
+
 <div class="min-h-[100svh] max-h-[100svh] overflow-hidden flex flex-col bg-gradient-to-b from-sky-100 to-emerald-50 relative"
      data-battle-live
      data-battle-id="{{ $battle->id }}"
@@ -42,7 +53,7 @@
      data-refresh-url="{{ route('battles.show', $battle) }}">
     <div class="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.55),_transparent_55%)]"></div>
 
-    <div class="relative flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-6">
+    <div class="relative flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-6 min-h-0">
         <div class="absolute top-3 left-4 flex items-center gap-2 text-xs text-slate-600">
             @include('partials.live_badge')
             <span data-battle-live-status>Connecting to live battle feed...</span>
@@ -54,7 +65,7 @@
             <span class="i-mdi-menu text-xl text-slate-800"></span>
         </button>
 
-        <div class="absolute top-4 left-4 max-w-[78%] sm:max-w-xs bg-white/80 backdrop-blur-md border border-white/60 rounded-xl px-3 py-2 shadow"
+        <div class="absolute top-4 left-4 max-w-[78%] sm:max-w-xs bg-white/85 backdrop-blur-md border border-white/70 rounded-2xl px-3 py-2 shadow"
              data-side="opponent">
             <p class="text-[10px] uppercase tracking-wide text-slate-500">Opponent</p>
             <div class="flex items-start justify-between gap-3">
@@ -81,7 +92,7 @@
             </div>
         </div>
 
-        <div class="absolute bottom-6 right-4 max-w-[78%] sm:max-w-xs bg-slate-900/85 backdrop-blur-md border border-slate-800 rounded-xl px-3 py-2 shadow-lg"
+        <div class="absolute bottom-6 right-4 max-w-[78%] sm:max-w-xs bg-slate-900/85 backdrop-blur-md border border-slate-800 rounded-2xl px-3 py-2 shadow-lg"
              data-side="you">
             <p class="text-[10px] uppercase tracking-wide text-emerald-200">You</p>
             <div class="flex items-start justify-between gap-3">
@@ -108,14 +119,14 @@
             </div>
         </div>
 
-        <div class="absolute top-[26%] right-6 w-32 sm:w-40 h-6 bg-emerald-900/15 rounded-full shadow-inner"></div>
-        <div class="absolute bottom-[24%] left-6 w-32 sm:w-44 h-7 bg-emerald-800/20 rounded-full shadow-inner"></div>
+        <div class="absolute top-[26%] right-6 w-32 sm:w-40 h-7 bg-emerald-900/20 rounded-full shadow-inner"></div>
+        <div class="absolute bottom-[24%] left-6 w-32 sm:w-44 h-8 bg-emerald-800/25 rounded-full shadow-inner"></div>
 
-        <div class="absolute top-[16%] right-8 h-28 w-28 sm:h-32 sm:w-32 bg-white/70 border border-white/70 rounded-full shadow-lg flex items-center justify-center text-sm text-slate-600"
+        <div class="absolute top-[16%] right-8 h-28 w-28 sm:h-32 sm:w-32 bg-white/80 border border-white/80 rounded-full shadow-lg flex items-center justify-center text-sm text-slate-700 animate-[float_4s_ease-in-out_infinite]"
              data-sprite="opponent">
             Opponent
         </div>
-        <div class="absolute bottom-[18%] left-8 h-28 w-28 sm:h-32 sm:w-32 bg-slate-900/80 border border-slate-800 rounded-full shadow-lg flex items-center justify-center text-sm text-emerald-100"
+        <div class="absolute bottom-[18%] left-8 h-28 w-28 sm:h-32 sm:w-32 bg-slate-900/85 border border-slate-800 rounded-full shadow-lg flex items-center justify-center text-sm text-emerald-100 animate-[float_4.5s_ease-in-out_infinite]"
              data-sprite="you">
             You
         </div>
@@ -152,17 +163,20 @@
         </div>
     </div>
 
-    <div class="relative z-10 bg-slate-900 text-white rounded-t-3xl px-4 py-4 sm:px-6 sm:py-5 border-t border-slate-800 shadow-xl shrink-0" data-battle-commands>
+    <div class="relative z-10 bg-slate-900/95 backdrop-blur text-white rounded-t-3xl px-4 py-4 sm:px-6 sm:py-5 border-t border-slate-800 shadow-xl shrink-0 max-h-[45svh] overflow-hidden" data-battle-commands>
         <div class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/90 opacity-0 scale-95 pointer-events-none transition duration-200 ease-out" data-battle-waiting-overlay>
             <div class="h-10 w-10 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
             <p class="text-lg font-semibold" data-battle-waiting-message>Waiting for opponent...</p>
         </div>
 
-        <div class="space-y-3" data-battle-commands-body>
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-2">
-                    <h3 class="text-lg font-semibold">Choose an action</h3>
-                    <span class="text-xs text-emerald-200 rounded-full border border-emerald-400/60 px-2 py-0.5 hidden" data-battle-commands-locked-hint>Locked</span>
+        <div class="space-y-3 max-h-[calc(45svh-1rem)] overflow-y-auto pr-1" data-battle-commands-body>
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex-1">
+                    <p class="text-sm text-emerald-100/80" data-turn-question>What will {{ $yourActive['name'] ?? 'your monster' }} do?</p>
+                    <div class="flex items-center gap-2 mt-1">
+                        <h3 class="text-lg font-semibold">Choose an action</h3>
+                        <span class="text-xs text-emerald-200 rounded-full border border-emerald-400/60 px-2 py-0.5 hidden" data-battle-commands-locked-hint>Locked</span>
+                    </div>
                 </div>
                 <span class="text-sm {{ $isYourTurn ? 'text-emerald-200' : 'text-slate-200/80' }}" data-turn-indicator>{{ $isYourTurn ? 'Your turn' : 'Waiting for opponent' }}</span>
             </div>
@@ -192,7 +206,7 @@
                             @csrf
                             <input type="hidden" name="type" value="move">
                             <input type="hidden" name="slot" value="{{ $move['slot'] }}">
-                            <button class="w-full h-full min-h-[64px] sm:min-h-[84px] lg:min-h-[92px] px-3 py-3 rounded-xl border border-slate-800 bg-gradient-to-br from-slate-800/80 to-slate-900/80 hover:border-emerald-300 hover:bg-emerald-300/10 hover:shadow-md text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="{{ $move['slot'] }}">
+                            <button class="w-full h-full min-h-[64px] sm:min-h-[84px] lg:min-h-[92px] px-3 py-3 rounded-xl border border-emerald-300/40 bg-gradient-to-br from-emerald-700/90 via-slate-900/80 to-slate-950/80 hover:border-emerald-200 hover:shadow-lg text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="{{ $move['slot'] }}">
                                 <div class="flex items-center justify-between gap-2">
                                     <span class="font-semibold">{{ $move['name'] }}</span>
                                     <span class="text-[11px] uppercase text-slate-200/80">Slot {{ $move['slot'] }}</span>

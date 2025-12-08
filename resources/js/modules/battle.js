@@ -40,7 +40,7 @@ const renderMoves = (moves = [], actUrl = '') => {
                     <input type="hidden" name="_token" value="${escapeHtml(document.head.querySelector('meta[name="csrf-token"]')?.content || '')}" />
                     <input type="hidden" name="type" value="move">
                     <input type="hidden" name="slot" value="${move.slot}">
-                    <button class="w-full h-full min-h-[64px] sm:min-h-[84px] lg:min-h-[92px] px-3 py-3 rounded-xl border border-slate-800 bg-gradient-to-br from-slate-800/80 to-slate-900/80 hover:border-emerald-300 hover:bg-emerald-300/10 hover:shadow-md text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="${move.slot}">
+                    <button class="w-full h-full min-h-[64px] sm:min-h-[84px] lg:min-h-[92px] px-3 py-3 rounded-xl border border-emerald-300/40 bg-gradient-to-br from-emerald-700/90 via-slate-900/80 to-slate-950/80 hover:border-emerald-200 hover:shadow-lg text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="${move.slot}">
                         <div class="flex items-center justify-between gap-2">
                             <span class="font-semibold">${escapeHtml(move.name)}</span>
                             <span class="text-[11px] uppercase text-slate-200/80">Slot ${move.slot}</span>
@@ -62,6 +62,7 @@ const renderCommands = (state, viewerId, actUrl = '') => {
     const opponentMustSwap = forcedSwitchUserId !== null && forcedSwitchUserId !== viewerId;
     const active = participant?.monsters?.[participant.active_index ?? 0];
     const bench = (participant?.monsters || []).filter((_, idx) => idx !== (participant?.active_index ?? 0));
+    const activeName = active?.name || 'your monster';
 
     const turnLabel = isForcedSwap
         ? 'Swap required'
@@ -70,9 +71,16 @@ const renderCommands = (state, viewerId, actUrl = '') => {
             : isActive
                 ? 'Waiting for opponent'
                 : 'Battle complete';
-    const turnColor = isYourTurn ? 'text-emerald-200' : 'text-slate-200/80';
+    const question = isForcedSwap
+        ? 'Choose a replacement to continue.'
+        : opponentMustSwap
+            ? 'Opponent is swapping...'
+            : !isYourTurn && isActive
+                ? 'Waiting for the opponent to move.'
+                : `What will ${escapeHtml(activeName)} do?`;
+    const turnColor = isYourTurn || isForcedSwap ? 'text-emerald-200' : 'text-slate-200/80';
     const header = `
-        <div class="flex items-center justify-between gap-3">\n            <div class="flex items-center gap-2">\n                <h3 class="text-lg font-semibold">Choose an action</h3>\n                <span class="text-xs text-emerald-200 rounded-full border border-emerald-400/60 px-2 py-0.5 hidden" data-battle-commands-locked-hint>Locked</span>\n            </div>\n            <span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span>\n        </div>
+        <div class="flex items-start justify-between gap-3">\n            <div class="flex-1">\n                <p class="text-sm text-emerald-100/80" data-turn-question>${question}</p>\n                <div class="flex items-center gap-2 mt-1">\n                    <h3 class="text-lg font-semibold">Choose an action</h3>\n                    <span class="text-xs text-emerald-200 rounded-full border border-emerald-400/60 px-2 py-0.5 hidden" data-battle-commands-locked-hint>Locked</span>\n                </div>\n            </div>\n            <span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span>\n        </div>
     `;
 
     const timer = `
