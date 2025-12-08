@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Battle\BattleActionService;
 use App\Domain\Battle\BattleEngine;
 use App\Domain\Pvp\PvpRankingService;
 use App\Http\Requests\BattleActionRequest;
 use App\Http\Requests\ChallengeBattleRequest;
 use App\Models\Battle;
-use App\Models\BattleTurn;
 use App\Models\MonsterInstance;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -16,7 +16,11 @@ use Symfony\Component\HttpFoundation\Response;
 
 class BattleController extends Controller
 {
-    public function __construct(private readonly BattleEngine $engine, private readonly PvpRankingService $rankingService)
+    public function __construct(
+        private readonly BattleEngine $engine,
+        private readonly BattleActionService $actionService,
+        private readonly PvpRankingService $rankingService,
+    )
     {
     }
 
@@ -86,28 +90,18 @@ class BattleController extends Controller
         }
 
         try {
-            [$state, $result, $hasEnded, $winnerId] = $this->engine->applyAction($battle, $actor->id, $request->validated());
+            $outcome = $this->actionService->handleAction($battle, $actor, $request->validated());
+            $state = $outcome['state'];
+            $result = $outcome['result'];
+            $hasEnded = $outcome['hasEnded'];
+            $winnerId = $outcome['winnerId'];
+            $battle = $outcome['battle'];
         } catch (\InvalidArgumentException $exception) {
             abort($exception->getCode() ?: Response::HTTP_BAD_REQUEST, $exception->getMessage());
         }
 
-        $battle->update([
-            'meta_json' => $state,
-            'status' => $hasEnded ? 'completed' : 'active',
-            'winner_user_id' => $winnerId,
-            'ended_at' => $hasEnded ? now() : null,
-        ]);
-
-        BattleTurn::query()->create([
-            'battle_id' => $battle->id,
-            'turn_number' => $result['turn'],
-            'actor_user_id' => $actor->id,
-            'action_json' => $request->validated(),
-            'result_json' => $result,
-        ]);
-
         if ($hasEnded && $winnerId !== null) {
-            $this->rankingService->handleBattleCompletion($battle->fresh());
+            $this->rankingService->handleBattleCompletion($battle);
         }
 
         return response()->json([
