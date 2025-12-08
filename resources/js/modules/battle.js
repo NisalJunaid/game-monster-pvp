@@ -40,7 +40,7 @@ const renderMoves = (moves = [], actUrl = '') => {
                     <input type="hidden" name="_token" value="${escapeHtml(document.head.querySelector('meta[name="csrf-token"]')?.content || '')}" />
                     <input type="hidden" name="type" value="move">
                     <input type="hidden" name="slot" value="${move.slot}">
-                    <button class="w-full h-full min-h-[64px] sm:min-h-[84px] lg:min-h-[92px] px-3 py-3 rounded-xl border border-slate-800 bg-gradient-to-br from-slate-800/80 to-slate-900/80 hover:border-emerald-300 hover:bg-emerald-300/10 hover:shadow-md text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="${move.slot}">
+                    <button class="w-full h-full min-h-[64px] px-3 py-3 rounded-xl border border-slate-800 bg-gradient-to-br from-slate-800/80 to-slate-900/80 hover:border-emerald-300 hover:bg-emerald-300/10 hover:shadow-md text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="${move.slot}">
                         <div class="flex items-center justify-between gap-2">
                             <span class="font-semibold">${escapeHtml(move.name)}</span>
                             <span class="text-[11px] uppercase text-slate-200/80">Slot ${move.slot}</span>
@@ -51,98 +51,6 @@ const renderMoves = (moves = [], actUrl = '') => {
             `,
         )
         .join('');
-};
-
-const renderCommands = (state, viewerId, actUrl = '') => {
-    const participant = state.participants?.[viewerId];
-    const isActive = (state?.status || 'active') === 'active';
-    const isYourTurn = isActive && (state.next_actor_id ?? null) === viewerId;
-    const forcedSwitchUserId = state?.forced_switch_user_id ?? null;
-    const isForcedSwap = forcedSwitchUserId !== null && forcedSwitchUserId === viewerId;
-    const opponentMustSwap = forcedSwitchUserId !== null && forcedSwitchUserId !== viewerId;
-    const active = participant?.monsters?.[participant.active_index ?? 0];
-    const bench = (participant?.monsters || []).filter((_, idx) => idx !== (participant?.active_index ?? 0));
-
-    const turnLabel = isForcedSwap
-        ? 'Swap required'
-        : isYourTurn
-            ? 'Your turn'
-            : isActive
-                ? 'Waiting for opponent'
-                : 'Battle complete';
-    const turnColor = isYourTurn ? 'text-emerald-200' : 'text-slate-200/80';
-    const header = `
-        <div class="flex items-center justify-between gap-3">\n            <div class="flex items-center gap-2">\n                <h3 class="text-lg font-semibold">Choose an action</h3>\n                <span class="text-xs text-emerald-200 rounded-full border border-emerald-400/60 px-2 py-0.5 hidden" data-battle-commands-locked-hint>Locked</span>\n            </div>\n            <span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span>\n        </div>
-    `;
-
-    const timer = `
-        <div class="mt-2 hidden" data-turn-timer>\n            <div class="flex items-center justify-between text-xs text-slate-200/80 mb-1">\n                <span data-turn-timer-label>Opponent turn timer</span>\n            </div>\n            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">\n                <div class="h-2 bg-amber-400 transition-[width] duration-100" style="width: 100%;" data-turn-timer-bar></div>\n            </div>\n            <p class="mt-1 text-xs text-amber-200 hidden" data-turn-timer-expired>\n                Time expired — waiting for server…\n            </p>\n        </div>
-    `;
-
-    if (!participant) {
-        return `${header}<p class="text-sm text-slate-200/80">Battle state unavailable.</p>`;
-    }
-
-    if (!isActive) {
-        return `${header}<p class="text-sm text-slate-200/80">Battle complete.</p>`;
-    }
-
-    if (opponentMustSwap) {
-        return `${header}${timer}<p class="text-sm text-slate-200/80">Waiting for opponent to swap.</p>`;
-    }
-
-    if (!isYourTurn || !active) {
-        return `${header}${timer}<p class="text-sm text-slate-200/80">Waiting for opponent action...</p>`;
-    }
-
-    const moveButtons = isForcedSwap
-        ? '<p class="text-sm text-amber-200">Your active monster fainted. Choose a replacement to continue.</p>'
-        : renderMoves(active.moves || [], actUrl);
-    const csrf = document.head.querySelector('meta[name=\"csrf-token\"]')?.content || '';
-    const swapSection = bench.length
-        ? `
-            <form method="POST" action="${escapeHtml(actUrl)}" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center" data-battle-action-form data-battle-swap-form>
-                <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
-                <input type="hidden" name="type" value="swap">\n                <select name="monster_instance_id" class="border-slate-700 bg-slate-800 text-white rounded-lg px-2 py-2 text-sm flex-1">\n                    ${bench
-                        .map((monster) => `<option value=\"${monster.id}\">Swap to ${escapeHtml(monster.name)} (HP ${monster.current_hp})</option>`)
-                        .join('')}\n                </select>
-                <button class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
-            </form>
-        `
-        : `<p class="text-xs text-slate-200/80">No reserve monsters available${(active.id ?? null) === 0 ? '—using martial arts move set.' : '.'}</p>`;
-
-    return `
-        ${header}
-        ${timer}
-        <div class="grid grid-cols-2 gap-3">${moveButtons}</div>
-        ${swapSection}
-    `;
-};
-
-const renderLog = (log = [], players = {}) => {
-    if (!log.length) {
-        return '<h2 class="text-xl font-semibold mb-3">Turn Log</h2><p class="text-gray-600">No turns recorded yet.</p>';
-    }
-
-    const items = log
-        .map(
-            (entry) => `
-                <div class="border rounded p-3 bg-gray-50">
-                    <div class="flex items-center justify-between">
-                        <p class="font-semibold">Turn ${entry.turn} by ${escapeHtml(players[entry.actor_user_id] || `User ${entry.actor_user_id}`)}</p>
-                        <span class="text-xs text-gray-500">Action: ${escapeHtml(entry.action?.type || 'unknown')}${entry.action?.type === 'move' ? ` (Slot ${entry.action.slot})` : ''}</span>
-                    </div>
-                    <ul class="list-disc list-inside text-gray-600">
-                        ${(entry.events || [])
-                            .map((event) => `<li>${escapeHtml(event.type ? event.type.charAt(0).toUpperCase() + event.type.slice(1) : 'Event')} - ${escapeHtml(JSON.stringify(event))}</li>`) 
-                            .join('')}
-                    </ul>
-                </div>
-            `,
-        )
-        .join('');
-
-    return `<h2 class="text-xl font-semibold mb-3">Turn Log</h2><div class="space-y-3 text-sm">${items}</div>`;
 };
 
 const parseInitialState = (container) => {
@@ -187,9 +95,8 @@ export function initBattleLive(root = document) {
     const commandsContainer = container.querySelector('[data-battle-commands]');
     const commandsBody = commandsContainer?.querySelector('[data-battle-commands-body]');
     const lockedHint = commandsContainer?.querySelector('[data-battle-commands-locked-hint]');
-    const logContainer = container.querySelector('[data-battle-log]');
-    const logWrapper = container.querySelector('[data-battle-log-wrapper]');
-    const logToggle = container.querySelector('[data-battle-log-toggle]');
+    const tabButtons = commandsContainer?.querySelectorAll('[data-battle-tab]') || [];
+    const tabPanels = commandsContainer?.querySelector('[data-battle-tab-panels]');
     const waitingOverlay = container.querySelector('[data-battle-waiting-overlay]');
     const waitingMessageEl = waitingOverlay?.querySelector('[data-battle-waiting-message]');
     const timerContainer = container.querySelector('[data-turn-timer]');
@@ -223,37 +130,6 @@ export function initBattleLive(root = document) {
     const defaultWaitingMessage = waitingMessageEl?.textContent?.trim() || 'Waiting for opponent...';
     let toastContainer = null;
 
-    const updateLogButtonState = () => {
-        if (!logToggle || !logWrapper) return;
-
-        const media = window.matchMedia('(min-width: 1024px)');
-        const isHidden = logWrapper.classList.contains('hidden') && !media.matches;
-        const label = logToggle.querySelector('span:last-child');
-        logToggle.setAttribute('aria-expanded', (!isHidden).toString());
-
-        if (label) {
-            label.textContent = isHidden ? 'Show Log' : 'Hide Log';
-        }
-    };
-
-    if (logToggle && logWrapper) {
-        const mq = window.matchMedia('(min-width: 1024px)');
-
-        logToggle.addEventListener('click', () => {
-            logWrapper.classList.toggle('hidden');
-            updateLogButtonState();
-        });
-
-        mq.addEventListener('change', (event) => {
-            if (event.matches) {
-                logWrapper.classList.remove('hidden');
-            }
-            updateLogButtonState();
-        });
-
-        updateLogButtonState();
-    }
-
     const setMenuOpen = (open) => {
         if (menuDrawer) {
             menuDrawer.classList.toggle('translate-x-full', !open);
@@ -277,6 +153,39 @@ export function initBattleLive(root = document) {
     if (menuClose) {
         menuClose.addEventListener('click', () => setMenuOpen(false));
     }
+
+    let activeTab = 'move';
+
+    const setActiveTab = (name, { hideAll = false, fallback = 'move' } = {}) => {
+        if (!tabPanels) return;
+
+        const targetName = hideAll ? null : name || fallback;
+        activeTab = targetName || fallback;
+
+        tabButtons.forEach((button) => {
+            const btnName = button.dataset.battleTab;
+            const isActive = targetName && btnName === targetName;
+            button.classList.toggle('bg-white/10', isActive);
+            button.classList.toggle('bg-white/5', !isActive);
+            button.classList.toggle('border-white/20', isActive);
+        });
+
+        tabPanels.querySelectorAll('[data-battle-panel]').forEach((panel) => {
+            const panelName = panel.dataset.battlePanel;
+            const show = targetName && panelName === targetName;
+            panel.classList.toggle('hidden', !show);
+        });
+    };
+
+    const initTabs = () => {
+        tabButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                setActiveTab(button.dataset.battleTab);
+            });
+        });
+
+        setActiveTab(activeTab);
+    };
 
     const updateWaitingMessage = (message = defaultWaitingMessage) => {
         if (!waitingMessageEl) return;
@@ -318,7 +227,7 @@ export function initBattleLive(root = document) {
     const shouldAllowSwapWhileWaiting = () => {
         const forcedSwitchUserId = battleState?.forced_switch_user_id ?? null;
 
-        return (forcedSwitchUserId !== null && forcedSwitchUserId === viewerId) || (battleState.next_actor_id ?? null) === viewerId;
+        return forcedSwitchUserId !== null && forcedSwitchUserId === viewerId;
     };
 
     const resetTimerUi = () => {
@@ -473,6 +382,78 @@ export function initBattleLive(root = document) {
         }
     };
 
+    const renderMovePanel = (state) => {
+        const participant = state.participants?.[viewerId];
+        const movePanel = tabPanels?.querySelector('[data-battle-panel="move"]');
+        if (!movePanel) return;
+
+        const active = participant?.monsters?.[participant.active_index ?? 0];
+
+        if (!active) {
+            movePanel.innerHTML = '<p class="text-sm text-slate-200/80">No active combatant.</p>';
+            return;
+        }
+
+        movePanel.innerHTML = renderMoves(active.moves || [], actUrl);
+    };
+
+    const renderSwitchPanel = (state) => {
+        const participant = state.participants?.[viewerId];
+        const swapPanel = tabPanels?.querySelector('[data-battle-panel="switch"]');
+        if (!swapPanel) return;
+
+        const bench = (participant?.monsters || []).filter((_, idx) => idx !== (participant?.active_index ?? 0));
+        const active = participant?.monsters?.[participant?.active_index ?? 0];
+
+        if (!bench.length) {
+            swapPanel.innerHTML = `<p class="text-xs text-slate-200/80">No reserve monsters available${(active?.id ?? null) === 0 ? '—using martial arts move set.' : '.'}</p>`;
+            return;
+        }
+
+        const options = bench
+            .map((monster) => `<option value="${monster.id}">Swap to ${escapeHtml(monster.name)} (HP ${monster.current_hp})</option>`)
+            .join('');
+        const csrf = document.head.querySelector('meta[name="csrf-token"]')?.content || '';
+
+        swapPanel.innerHTML = `
+            <form method="POST" action="${escapeHtml(actUrl)}" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center" data-battle-action-form data-battle-swap-form>
+                <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
+                <input type="hidden" name="type" value="swap">
+                <select name="monster_instance_id" class="border-slate-700 bg-slate-800 text-white rounded-lg px-2 py-2 text-sm flex-1">
+                    ${options}
+                </select>
+                <button class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
+            </form>
+        `;
+    };
+
+    const updateTurnIndicator = () => {
+        const indicator = commandsBody?.querySelector('[data-turn-indicator]');
+        const isActive = battleStatus === 'active';
+        const forcedSwitchUserId = battleState?.forced_switch_user_id ?? null;
+        const opponentMustSwap = forcedSwitchUserId !== null && forcedSwitchUserId !== viewerId;
+        const isYourTurn = isActive && (battleState.next_actor_id ?? null) === viewerId && !opponentMustSwap;
+        const isForcedSwap = forcedSwitchUserId !== null && forcedSwitchUserId === viewerId;
+
+        const label = isForcedSwap ? 'Swap required' : isYourTurn ? 'Your turn' : isActive ? 'Waiting for opponent' : 'Battle complete';
+
+        if (indicator) {
+            indicator.textContent = label;
+            indicator.classList.toggle('text-emerald-200', isYourTurn || isForcedSwap);
+            indicator.classList.toggle('text-slate-200/80', !isYourTurn && !isForcedSwap);
+        }
+
+        if (!isActive) {
+            setWaitingState(false);
+        }
+
+        if (isForcedSwap) {
+            setActiveTab('switch');
+        } else if (isYourTurn && !waitingForResolution) {
+            setActiveTab(activeTab || 'move');
+        }
+    };
+
     const updateInteractionState = () => {
         const isActive = battleStatus === 'active';
         const forcedSwitchUserId = battleState?.forced_switch_user_id ?? null;
@@ -482,8 +463,10 @@ export function initBattleLive(root = document) {
 
         if ((!waitingForResolution || waitingReason !== 'resolution') && shouldWaitForTurn) {
             setWaitingState(true, { allowSwap: false, message: 'Waiting for opponent...', reason: 'turn' });
+            setActiveTab(activeTab, { hideAll: true });
         } else if (waitingReason === 'turn' && (!shouldWaitForTurn || !isActive)) {
             setWaitingState(false);
+            setActiveTab(activeTab || 'move');
         }
 
         const controlsLocked = waitingForResolution || shouldWaitForTurn;
@@ -497,17 +480,9 @@ export function initBattleLive(root = document) {
 
         patchHud('you', yourSide);
         patchHud('opponent', opponentSide);
-
-        if (commandsBody) {
-            commandsBody.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId, actUrl);
-        } else if (commandsContainer) {
-            commandsContainer.innerHTML = renderCommands({ ...battleState, status: battleStatus }, viewerId, actUrl);
-        }
-
-        if (logContainer) {
-            logContainer.innerHTML = renderLog(battleState.log || [], players);
-        }
-
+        renderMovePanel({ ...battleState, status: battleStatus });
+        renderSwitchPanel({ ...battleState, status: battleStatus });
+        updateTurnIndicator();
         updateHeader();
         updateInteractionState();
     };
@@ -548,6 +523,12 @@ export function initBattleLive(root = document) {
         resolutionAllowsSwap = allowSwap;
         const canInteractWithSwap = allowSwap && shouldAllowSwapWhileWaiting();
         toggleControls(waiting, { allowSwap: canInteractWithSwap });
+
+        if (waiting && !canInteractWithSwap) {
+            setActiveTab(activeTab, { hideAll: true });
+        } else if (!waiting) {
+            setActiveTab(activeTab || 'move');
+        }
 
         if (waitingOverlay) {
             if (message) {
@@ -731,6 +712,8 @@ export function initBattleLive(root = document) {
             }
         }, 3000);
     };
+
+    initTabs();
 
     container.addEventListener('submit', (event) => {
         const target = event.target;
