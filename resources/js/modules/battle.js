@@ -2,6 +2,24 @@ import axios from 'axios';
 
 const escapeHtml = (value = '') => `${value}`.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const parseTime = (value) => {
+    if (!value && value !== 0) return null;
+
+    if (typeof value === 'number') {
+        return value;
+    }
+
+    const asNumber = Number(value);
+    if (!Number.isNaN(asNumber)) {
+        return asNumber;
+    }
+
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+};
+
 const hpPercent = (monster) => {
     if (!monster) return 0;
     const max = Math.max(1, monster.max_hp || 0);
@@ -208,6 +226,10 @@ export function initBattleLive(root = document) {
     const logContainer = container.querySelector('[data-battle-log]');
     const waitingOverlay = container.querySelector('[data-battle-waiting-overlay]');
     const waitingMessageEl = waitingOverlay?.querySelector('[data-battle-waiting-message]');
+    const timerContainer = container.querySelector('[data-turn-timer]');
+    const timerBar = timerContainer?.querySelector('[data-turn-timer-bar]');
+    const timerExpiredText = timerContainer?.querySelector('[data-turn-timer-expired]');
+    const timerLabel = timerContainer?.querySelector('[data-turn-timer-label]');
 
     const opponentId = initial.battle?.player1_id === viewerId ? initial.battle?.player2_id : initial.battle?.player1_id;
     let pollHandle = null;
@@ -221,7 +243,13 @@ export function initBattleLive(root = document) {
     let currentEchoState = window.__echoConnectionState || (window.Echo ? 'connecting' : 'disconnected');
     let initialEventTimeout = null;
     let waitingForResolution = false;
+    let timerHandle = null;
+    let timerEndsAtMs = null;
+    let timerDurationMs = null;
+    let lastTurnExpiresAt = battleState?.turn_expires_at ?? null;
+    let lastLogLength = battleState?.log?.length || 0;
     const defaultWaitingMessage = waitingMessageEl?.textContent?.trim() || 'Waiting for opponent...';
+    let toastContainer = null;
 
     const updateWaitingMessage = (message = defaultWaitingMessage) => {
         if (!waitingMessageEl) return;
@@ -229,10 +257,134 @@ export function initBattleLive(root = document) {
         waitingMessageEl.textContent = message;
     };
 
+    const getToastContainer = () => {
+        if (toastContainer) return toastContainer;
+
+        const el = document.createElement('div');
+        el.dataset.toastContainer = 'true';
+        el.className = 'fixed bottom-4 right-4 space-y-2 z-50';
+        document.body.appendChild(el);
+        toastContainer = el;
+
+        return el;
+    };
+
+    const showToast = (message = '') => {
+        if (!message) return;
+
+        const containerEl = getToastContainer();
+        const toast = document.createElement('div');
+        toast.className = 'bg-gray-900 text-white px-4 py-2 rounded shadow-lg opacity-0 translate-y-2 transition duration-300';
+        toast.textContent = message;
+        containerEl.appendChild(toast);
+
+        requestAnimationFrame(() => {
+            toast.classList.remove('opacity-0', 'translate-y-2');
+        });
+
+        window.setTimeout(() => {
+            toast.classList.add('opacity-0', 'translate-y-2');
+            window.setTimeout(() => toast.remove(), 300);
+        }, 3500);
+    };
+
     const shouldAllowSwapWhileWaiting = () => {
         const forcedSwitchUserId = battleState?.forced_switch_user_id ?? null;
 
         return (forcedSwitchUserId !== null && forcedSwitchUserId === viewerId) || (battleState.next_actor_id ?? null) === viewerId;
+    };
+
+    const resetTimerUi = () => {
+        if (timerBar) {
+            timerBar.style.width = '100%';
+        }
+
+        if (timerExpiredText) {
+            timerExpiredText.classList.add('hidden');
+        }
+    };
+
+    const hideTurnTimer = () => {
+        if (timerHandle) {
+            clearInterval(timerHandle);
+            timerHandle = null;
+        }
+
+        timerEndsAtMs = null;
+        timerDurationMs = null;
+        resetTimerUi();
+
+        if (timerContainer) {
+            timerContainer.classList.add('hidden');
+        }
+    };
+
+    const tickTurnTimer = () => {
+        if (!timerBar || timerEndsAtMs === null || timerDurationMs === null) {
+            return;
+        }
+
+        const remaining = Math.max(0, timerEndsAtMs - Date.now());
+        const pct = timerDurationMs ? clamp(remaining / timerDurationMs, 0, 1) : 0;
+        timerBar.style.width = `${pct * 100}%`;
+
+        if (timerExpiredText) {
+            timerExpiredText.classList.toggle('hidden', remaining > 0);
+        }
+    };
+
+    const startTurnTimer = (state) => {
+        const isActive = battleStatus === 'active';
+        const forcedSwitchUserId = state?.forced_switch_user_id ?? null;
+        const opponentMustSwap = forcedSwitchUserId !== null && forcedSwitchUserId !== viewerId;
+        const isYourTurn = isActive && (state?.next_actor_id ?? null) === viewerId && !opponentMustSwap;
+
+        if (!isActive || (!opponentMustSwap && isYourTurn)) {
+            hideTurnTimer();
+            return;
+        }
+
+        const expiresAt = state?.turn_expires_at ?? null;
+        const startedAt = state?.turn_started_at ?? null;
+        const timeoutSeconds = state?.turn_timeout_seconds ?? null;
+        const endsAtMs = parseTime(expiresAt);
+        let durationMs = typeof timeoutSeconds === 'number' && timeoutSeconds > 0 ? timeoutSeconds * 1000 : null;
+
+        if (!durationMs) {
+            const startMs = parseTime(startedAt);
+            if (endsAtMs !== null && startMs !== null) {
+                durationMs = Math.max(endsAtMs - startMs, 0);
+            }
+        }
+
+        if (endsAtMs === null || !durationMs || durationMs <= 0) {
+            hideTurnTimer();
+            return;
+        }
+
+        const hasNewDeadline = expiresAt !== lastTurnExpiresAt;
+        lastTurnExpiresAt = expiresAt;
+        timerEndsAtMs = endsAtMs;
+        timerDurationMs = durationMs;
+
+        if (timerContainer) {
+            timerContainer.classList.remove('hidden');
+        }
+
+        if (timerLabel) {
+            timerLabel.textContent = opponentMustSwap ? 'Opponent swap timer' : 'Opponent turn timer';
+        }
+
+        if (hasNewDeadline) {
+            resetTimerUi();
+        }
+
+        if (timerHandle) {
+            clearInterval(timerHandle);
+        }
+
+        tickTurnTimer();
+        timerHandle = window.setInterval(tickTurnTimer, 100);
     };
 
     const updateHeader = () => {
@@ -322,6 +474,20 @@ export function initBattleLive(root = document) {
         }
     };
 
+    const entryContainsTimeout = (entry) => {
+        const text = JSON.stringify(entry || {}).toLowerCase();
+        return text.includes('timed out') || text.includes('timeout');
+    };
+
+    const notifyTimeoutLogs = (previousLength, log = []) => {
+        if (!log.length || log.length <= previousLength) return;
+
+        const newEntries = log.slice(previousLength);
+        if (newEntries.some((entry) => entryContainsTimeout(entry))) {
+            showToast('Turn timed out.');
+        }
+    };
+
     const scheduleCompletion = () => {
         if (hasScheduledCompletion || battleStatus === 'active') {
             return;
@@ -366,6 +532,8 @@ export function initBattleLive(root = document) {
             return;
         }
 
+        const previousLogLength = lastLogLength;
+
         lastUpdateAt = Date.now();
 
         if (fromEvent && awaitingEvent) {
@@ -390,6 +558,9 @@ export function initBattleLive(root = document) {
         battleState = payload.state || battleState;
         battleStatus = payload.status || payload.battle?.status || battleStatus;
         winnerId = payload.winner_user_id ?? payload.battle?.winner_user_id ?? winnerId;
+        startTurnTimer(battleState);
+        notifyTimeoutLogs(previousLogLength, battleState.log || []);
+        lastLogLength = (battleState.log || []).length;
         render();
 
         const isActive = battleStatus === 'active';
@@ -489,6 +660,7 @@ export function initBattleLive(root = document) {
     });
 
     render();
+    startTurnTimer(battleState);
 
     if (battleStatus !== 'active') {
         scheduleCompletion();

@@ -152,6 +152,24 @@
                 <span class="text-sm {{ $isYourTurn ? 'text-emerald-600' : 'text-gray-500' }}" data-turn-indicator>{{ $isYourTurn ? 'Your turn' : 'Waiting for opponent' }}</span>
             </div>
 
+            <div class="mt-2 hidden" data-turn-timer>
+                <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+                    <span data-turn-timer-label>Opponent turn timer</span>
+                </div>
+
+                <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                        class="h-2 bg-amber-500 transition-[width] duration-100"
+                        style="width: 100%;"
+                        data-turn-timer-bar
+                    ></div>
+                </div>
+
+                <p class="mt-1 text-xs text-gray-500 hidden" data-turn-timer-expired>
+                    Time expired — waiting for server…
+                </p>
+            </div>
+
             @if($isYourTurn && $yourActive)
                 <div class="grid md:grid-cols-2 gap-3">
                     @foreach($yourActive['moves'] as $move)
