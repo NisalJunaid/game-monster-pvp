@@ -40,7 +40,7 @@ const renderMoves = (moves = [], actUrl = '') => {
                     <input type="hidden" name="_token" value="${escapeHtml(document.head.querySelector('meta[name="csrf-token"]')?.content || '')}" />
                     <input type="hidden" name="type" value="move">
                     <input type="hidden" name="slot" value="${move.slot}">
-                    <button class="w-full h-full min-h-[64px] px-3 py-3 rounded-xl border border-slate-800 bg-gradient-to-br from-slate-800/80 to-slate-900/80 hover:border-emerald-300 hover:bg-emerald-300/10 hover:shadow-md text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="${move.slot}">
+                    <button class="w-full h-full min-h-[64px] sm:min-h-[84px] lg:min-h-[92px] px-3 py-3 rounded-xl border border-emerald-300/40 bg-gradient-to-br from-emerald-700/90 via-slate-900/80 to-slate-950/80 hover:border-emerald-200 hover:shadow-lg text-left transition-transform duration-150 active:scale-[0.98]" data-move-slot="${move.slot}">
                         <div class="flex items-center justify-between gap-2">
                             <span class="font-semibold">${escapeHtml(move.name)}</span>
                             <span class="text-[11px] uppercase text-slate-200/80">Slot ${move.slot}</span>
@@ -51,6 +51,106 @@ const renderMoves = (moves = [], actUrl = '') => {
             `,
         )
         .join('');
+};
+
+const renderCommands = (state, viewerId, actUrl = '') => {
+    const participant = state.participants?.[viewerId];
+    const isActive = (state?.status || 'active') === 'active';
+    const isYourTurn = isActive && (state.next_actor_id ?? null) === viewerId;
+    const forcedSwitchUserId = state?.forced_switch_user_id ?? null;
+    const isForcedSwap = forcedSwitchUserId !== null && forcedSwitchUserId === viewerId;
+    const opponentMustSwap = forcedSwitchUserId !== null && forcedSwitchUserId !== viewerId;
+    const active = participant?.monsters?.[participant.active_index ?? 0];
+    const bench = (participant?.monsters || []).filter((_, idx) => idx !== (participant?.active_index ?? 0));
+    const activeName = active?.name || 'your monster';
+
+    const turnLabel = isForcedSwap
+        ? 'Swap required'
+        : isYourTurn
+            ? 'Your turn'
+            : isActive
+                ? 'Waiting for opponent'
+                : 'Battle complete';
+    const question = isForcedSwap
+        ? 'Choose a replacement to continue.'
+        : opponentMustSwap
+            ? 'Opponent is swapping...'
+            : !isYourTurn && isActive
+                ? 'Waiting for the opponent to move.'
+                : `What will ${escapeHtml(activeName)} do?`;
+    const turnColor = isYourTurn || isForcedSwap ? 'text-emerald-200' : 'text-slate-200/80';
+    const header = `
+        <div class="flex items-start justify-between gap-3">\n            <div class="flex-1">\n                <p class="text-sm text-emerald-100/80" data-turn-question>${question}</p>\n                <div class="flex items-center gap-2 mt-1">\n                    <h3 class="text-lg font-semibold">Choose an action</h3>\n                    <span class="text-xs text-emerald-200 rounded-full border border-emerald-400/60 px-2 py-0.5 hidden" data-battle-commands-locked-hint>Locked</span>\n                </div>\n            </div>\n            <span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span>\n        </div>
+    `;
+
+    const timer = `
+        <div class="mt-2 hidden" data-turn-timer>\n            <div class="flex items-center justify-between text-xs text-slate-200/80 mb-1">\n                <span data-turn-timer-label>Opponent turn timer</span>\n            </div>\n            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">\n                <div class="h-2 bg-amber-400 transition-[width] duration-100" style="width: 100%;" data-turn-timer-bar></div>\n            </div>\n            <p class="mt-1 text-xs text-amber-200 hidden" data-turn-timer-expired>\n                Time expired — waiting for server…\n            </p>\n        </div>
+    `;
+
+    if (!participant) {
+        return `${header}<p class="text-sm text-slate-200/80">Battle state unavailable.</p>`;
+    }
+
+    if (!isActive) {
+        return `${header}<p class="text-sm text-slate-200/80">Battle complete.</p>`;
+    }
+
+    if (opponentMustSwap) {
+        return `${header}${timer}<p class="text-sm text-slate-200/80">Waiting for opponent to swap.</p>`;
+    }
+
+    if (!isYourTurn || !active) {
+        return `${header}${timer}<p class="text-sm text-slate-200/80">Waiting for opponent action...</p>`;
+    }
+
+    const moveButtons = isForcedSwap
+        ? '<p class="text-sm text-amber-200">Your active monster fainted. Choose a replacement to continue.</p>'
+        : renderMoves(active.moves || [], actUrl);
+    const csrf = document.head.querySelector('meta[name=\"csrf-token\"]')?.content || '';
+    const swapSection = bench.length
+        ? `
+            <form method="POST" action="${escapeHtml(actUrl)}" class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center" data-battle-action-form data-battle-swap-form>
+                <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
+                <input type="hidden" name="type" value="swap">\n                <select name="monster_instance_id" class="border-slate-700 bg-slate-800 text-white rounded-lg px-2 py-2 text-sm flex-1">\n                    ${bench
+                        .map((monster) => `<option value=\"${monster.id}\">Swap to ${escapeHtml(monster.name)} (HP ${monster.current_hp})</option>`)
+                        .join('')}\n                </select>
+                <button class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-transform duration-150 active:scale-[0.98]">Swap</button>
+            </form>
+        `
+        : `<p class="text-xs text-slate-200/80">No reserve monsters available${(active.id ?? null) === 0 ? '—using martial arts move set.' : '.'}</p>`;
+
+    return `
+        ${header}
+        ${timer}
+        <div class="grid grid-cols-2 gap-3">${moveButtons}</div>
+        ${swapSection}
+    `;
+};
+
+const renderLog = (log = [], players = {}) => {
+    if (!log.length) {
+        return '<h2 class="text-xl font-semibold mb-3">Turn Log</h2><p class="text-gray-600">No turns recorded yet.</p>';
+    }
+
+    const items = log
+        .map(
+            (entry) => `
+                <div class="border rounded p-3 bg-gray-50">
+                    <div class="flex items-center justify-between">
+                        <p class="font-semibold">Turn ${entry.turn} by ${escapeHtml(players[entry.actor_user_id] || `User ${entry.actor_user_id}`)}</p>
+                        <span class="text-xs text-gray-500">Action: ${escapeHtml(entry.action?.type || 'unknown')}${entry.action?.type === 'move' ? ` (Slot ${entry.action.slot})` : ''}</span>
+                    </div>
+                    <ul class="list-disc list-inside text-gray-600">
+                        ${(entry.events || [])
+                            .map((event) => `<li>${escapeHtml(event.type ? event.type.charAt(0).toUpperCase() + event.type.slice(1) : 'Event')} - ${escapeHtml(JSON.stringify(event))}</li>`) 
+                            .join('')}
+                    </ul>
+                </div>
+            `,
+        )
+        .join('');
+
+    return `<h2 class="text-xl font-semibold mb-3">Turn Log</h2><div class="space-y-3 text-sm">${items}</div>`;
 };
 
 const parseInitialState = (container) => {
