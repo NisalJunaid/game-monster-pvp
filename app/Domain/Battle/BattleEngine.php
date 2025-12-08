@@ -9,11 +9,14 @@ use App\Models\TypeEffectiveness;
 use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\Response;
 
 class BattleEngine
 {
+    private const DEFAULT_TURN_TIMEOUT_SECONDS = 30;
+
     private array $typeChart;
 
     public function __construct()
@@ -27,19 +30,26 @@ class BattleEngine
 
     public function initialize(User $player1, User $player2, Collection $player1Party, Collection $player2Party, int $seed): array
     {
-        return [
+        $state = [
             'seed' => $seed,
             'rng_state' => $seed,
             'turn' => 1,
             'next_actor_id' => $player1->id,
             'forced_switch_user_id' => null,
             'forced_switch_reason' => null,
+            'turn_timeout_seconds' => self::DEFAULT_TURN_TIMEOUT_SECONDS,
+            'turn_started_at' => null,
+            'turn_expires_at' => null,
             'participants' => [
                 $player1->id => $this->buildParticipant($player1, $player1Party),
                 $player2->id => $this->buildParticipant($player2, $player2Party),
             ],
             'log' => [],
         ];
+
+        $this->refreshTurnTimer($state);
+
+        return $state;
     }
 
     public function applyAction(Battle $battle, int $actorUserId, array $action): array
@@ -75,6 +85,8 @@ class BattleEngine
             $state['turn']++;
             $state['next_actor_id'] = $opponentUserId;
 
+            $this->refreshTurnTimer($state);
+
             return [$state, $result, false, null];
         }
 
@@ -83,6 +95,8 @@ class BattleEngine
             $state['rng_state'] = $rng->currentState();
             $state['turn']++;
             $state['next_actor_id'] = $opponentUserId;
+
+            $this->refreshTurnTimer($state);
 
             return [$state, $result, false, null];
         }
@@ -147,7 +161,26 @@ class BattleEngine
         $state['participants'][$actorUserId] = $actorSide;
         $state['participants'][$opponentUserId] = $opponentSide;
 
+        $this->refreshTurnTimer($state);
+
         return [$state, $result, $hasEnded, $winnerId];
+    }
+
+    private function refreshTurnTimer(array & $state): void
+    {
+        $timeoutSeconds = $state['turn_timeout_seconds'] ?? self::DEFAULT_TURN_TIMEOUT_SECONDS;
+        $state['turn_timeout_seconds'] = $timeoutSeconds;
+
+        if (($state['next_actor_id'] ?? null) === null) {
+            $state['turn_started_at'] = null;
+            $state['turn_expires_at'] = null;
+
+            return;
+        }
+
+        $startedAt = Carbon::now();
+        $state['turn_started_at'] = $startedAt->toIso8601String();
+        $state['turn_expires_at'] = $startedAt->copy()->addSeconds($timeoutSeconds)->toIso8601String();
     }
 
     private function buildParticipant(User $user, Collection $party): array
