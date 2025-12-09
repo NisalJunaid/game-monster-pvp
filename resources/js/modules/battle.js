@@ -74,12 +74,49 @@ const renderMoves = (moves = []) => {
         .join('');
 };
 
+const renderTeamList = (monsters = [], activeId = null, role = 'you') => {
+    if (!monsters.length) {
+        return '<p class="text-sm text-gray-500">No team members.</p>';
+    }
+
+    return monsters
+        .map((monster) => {
+            const isActive = monster.id === activeId;
+            const fainted = (monster.current_hp || 0) <= 0;
+            const badge = isActive
+                ? '<span class="ml-2 text-emerald-300 text-xs bg-emerald-900/40 px-2 py-0.5 rounded-full">Active</span>'
+                : '';
+            const hpText = `HP ${monster.current_hp} / ${monster.max_hp}`;
+
+            return `
+                <div class="flex items-center justify-between rounded px-3 py-2 ${
+                    isActive
+                        ? role === 'you'
+                            ? 'ring-2 ring-emerald-400 bg-slate-800/60'
+                            : 'ring-2 ring-rose-300 bg-white'
+                        : role === 'you'
+                          ? 'bg-slate-800/40'
+                          : 'bg-gray-100'
+                }">
+                    <div class="flex items-center">
+                        <span class="${fainted ? 'line-through opacity-70' : ''}">${escapeHtml(monster.name)} (Lv ${monster.level})</span>
+                        ${badge}
+                    </div>
+                    <span class="${role === 'you' ? 'text-slate-200' : 'text-gray-700'}">${hpText}</span>
+                </div>
+            `;
+        })
+        .join('');
+};
+
 const renderCommands = (state, viewerId) => {
     const participant = state.participants?.[viewerId];
     const isActive = (state?.status || 'active') === 'active';
     const isYourTurn = isActive && (state.next_actor_id ?? null) === viewerId;
     const active = participant?.monsters?.[participant.active_index ?? 0];
     const bench = (participant?.monsters || []).filter((_, idx) => idx !== (participant?.active_index ?? 0));
+    const healthyBench = bench.filter((monster) => monster.current_hp > 0);
+    const isFainted = (active?.current_hp ?? 0) <= 0;
 
     const turnLabel = isYourTurn ? 'Your turn' : isActive ? 'Waiting for opponent' : 'Battle complete';
     const turnColor = isYourTurn ? 'text-emerald-600' : 'text-gray-500';
@@ -98,20 +135,38 @@ const renderCommands = (state, viewerId) => {
 
     const moveButtons = renderMoves(active.moves || []);
     const csrf = document.head.querySelector('meta[name="csrf-token"]')?.content || '';
-    const swapSection = bench.length
+    const swapButtons = healthyBench.length
         ? `
-            <form method="POST" class="flex items-center gap-2" data-battle-action-form>
-                <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
-                <input type="hidden" name="type" value="swap">
-                <select name="monster_instance_id" class="border-gray-300 rounded">
-                    ${bench
-                        .map((monster) => `<option value="${monster.id}">Swap to ${escapeHtml(monster.name)} (HP ${monster.current_hp})</option>`)
-                        .join('')}
-                </select>
-                <button class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">Swap</button>
-            </form>
+            <div class="grid sm:grid-cols-2 gap-2" data-swap-options>
+                ${healthyBench
+                    .map(
+                        (monster) => `
+                            <form method="POST" class="w-full" data-battle-action-form>
+                                <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
+                                <input type="hidden" name="type" value="swap">
+                                <input type="hidden" name="monster_instance_id" value="${monster.id}">
+                                <button class="w-full px-3 py-2 rounded border border-gray-200 bg-white hover:border-indigo-400 text-left">
+                                    <div class="font-semibold">${escapeHtml(monster.name)}</div>
+                                    <p class="text-sm text-gray-600">Lv ${monster.level ?? '?'} • HP ${monster.current_hp ?? 0} / ${monster.max_hp ?? 0}</p>
+                                </button>
+                            </form>
+                        `,
+                    )
+                    .join('')}
+            </div>
         `
-        : `<p class="text-xs text-gray-500">No reserve monsters available${(active.id ?? null) === 0 ? '—using martial arts move set.' : '.'}</p>`;
+        : `<p class="text-xs text-gray-500">No healthy teammates to switch into.</p>`;
+
+    if (isFainted) {
+        return `
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold">Battle commands</h3>
+                <span class="text-sm ${turnColor}" data-turn-indicator>Switch required</span>
+            </div>
+            <p class="text-sm text-gray-700">Your active monster has fainted. Choose a healthy teammate to continue the battle.</p>
+            ${swapButtons}
+        `;
+    }
 
     return `
         <div class="flex items-center justify-between">
@@ -119,7 +174,10 @@ const renderCommands = (state, viewerId) => {
             <span class="text-sm ${turnColor}" data-turn-indicator>${escapeHtml(turnLabel)}</span>
         </div>
         <div class="grid md:grid-cols-2 gap-3">${moveButtons}</div>
-        ${swapSection}
+        <div class="mt-3">
+            <p class="text-xs text-gray-600 mb-2">Switch to another monster:</p>
+            ${swapButtons}
+        </div>
     `;
 };
 
@@ -188,6 +246,8 @@ export function initBattleLive(root = document) {
     const modeEl = container.querySelector('[data-battle-mode]');
     const yourSideContainer = container.querySelector('[data-side="you"]');
     const opponentSideContainer = container.querySelector('[data-side="opponent"]');
+    const yourTeamList = container.querySelector('[data-team-list="you"]');
+    const opponentTeamList = container.querySelector('[data-team-list="opponent"]');
     const commandsContainer = container.querySelector('[data-battle-commands]');
     const commandsBody = commandsContainer?.querySelector('[data-battle-commands-body]');
     const logContainer = container.querySelector('[data-battle-log]');
@@ -233,6 +293,8 @@ export function initBattleLive(root = document) {
     const render = () => {
         const yourSide = battleState.participants?.[viewerId];
         const opponentSide = opponentId ? battleState.participants?.[opponentId] : null;
+        const yourActiveId = yourSide?.monsters?.[yourSide?.active_index ?? 0]?.id ?? null;
+        const opponentActiveId = opponentSide?.monsters?.[opponentSide?.active_index ?? 0]?.id ?? null;
 
         if (yourSideContainer) {
             yourSideContainer.innerHTML = '<p class="text-xs uppercase tracking-wide text-slate-300">You</p>' + renderSide(yourSide, 'you');
@@ -240,6 +302,14 @@ export function initBattleLive(root = document) {
 
         if (opponentSideContainer) {
             opponentSideContainer.innerHTML = '<p class="text-xs uppercase tracking-wide text-gray-500">Opponent</p>' + renderSide(opponentSide, 'opponent');
+        }
+
+        if (yourTeamList) {
+            yourTeamList.innerHTML = renderTeamList(yourSide?.monsters || [], yourActiveId, 'you');
+        }
+
+        if (opponentTeamList) {
+            opponentTeamList.innerHTML = renderTeamList(opponentSide?.monsters || [], opponentActiveId, 'opponent');
         }
 
         if (commandsBody) {

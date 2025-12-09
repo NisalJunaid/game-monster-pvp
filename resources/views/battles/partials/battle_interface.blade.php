@@ -13,6 +13,25 @@
         $battle->player1_id => $battle->player1?->name ?? 'Player '.$battle->player1_id,
         $battle->player2_id => $battle->player2?->name ?? 'Player '.$battle->player2_id,
     ];
+    $renderTeamList = function (array $monsters, ?int $activeId, bool $isYou = false) {
+        return collect($monsters)->map(function (array $monster) use ($activeId, $isYou) {
+            $isActive = ($monster['id'] ?? null) === $activeId;
+            $name = e($monster['name'] ?? 'Unknown');
+            $level = e($monster['level'] ?? '?');
+            $hpText = e(($monster['current_hp'] ?? 0).' / '.($monster['max_hp'] ?? 0));
+            $badge = $isActive ? '<span class="ml-2 text-emerald-300 text-xs bg-emerald-900/40 px-2 py-0.5 rounded-full">Active</span>' : '';
+            $isFainted = ($monster['current_hp'] ?? 0) <= 0;
+            $textColor = $isYou ? 'text-slate-200' : 'text-gray-700';
+            $baseClass = $isActive
+                ? ($isYou ? 'ring-2 ring-emerald-400 bg-slate-800/60' : 'ring-2 ring-rose-300 bg-white')
+                : ($isYou ? 'bg-slate-800/40' : 'bg-gray-100');
+
+            return "<div class=\"flex items-center justify-between rounded px-3 py-2 {$baseClass}\">"
+                ."<div class=\"flex items-center\"><span class=\"".($isFainted ? 'line-through opacity-70' : '')."\">{$name} (Lv {$level})</span>{$badge}</div>"
+                ."<span class=\"{$textColor}\">HP {$hpText}</span>"
+                .'</div>';
+        })->implode('');
+    };
 @endphp
 
 <script type="application/json" data-battle-initial-state>
@@ -135,6 +154,24 @@
                     @else
                         <p class="text-xs text-gray-600">No active combatant.</p>
                     @endif
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white shadow rounded-xl p-6">
+        <h3 class="text-lg font-semibold mb-3">Team status</h3>
+        <div class="grid md:grid-cols-2 gap-4">
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">Your team</p>
+                <div class="space-y-2" data-team-list="you">
+                    {!! $renderTeamList($yourSide['monsters'] ?? [], $yourActive['id'] ?? null, true) !!}
+                </div>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Opponent team</p>
+                <div class="space-y-2" data-team-list="opponent">
+                    {!! $renderTeamList($opponentSide['monsters'] ?? [], $opponentActive['id'] ?? null, false) !!}
                 </div>
             </div>
         </div>

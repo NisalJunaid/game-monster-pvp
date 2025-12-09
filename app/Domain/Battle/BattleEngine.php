@@ -56,23 +56,14 @@ class BattleEngine
 
         $activeAttacker = & $actorSide['monsters'][$actorSide['active_index']];
         $activeDefender = & $opponentSide['monsters'][$opponentSide['active_index']];
+        $attackerHp = $activeAttacker['current_hp'] ?? 0;
 
-        if ($this->isAsleep($activeAttacker, $result)) {
-            $this->applyResidual($activeAttacker, $result);
-            $state['rng_state'] = $rng->currentState();
-            $state['turn']++;
-            $state['next_actor_id'] = $opponentUserId;
-
-            return [$state, $result, false, null];
+        if ($attackerHp <= 0 && $action['type'] !== 'swap') {
+            throw new InvalidArgumentException('Your active monster has fainted. Swap to a healthy monster.');
         }
 
-        if ($this->isShockedAndImmobilized($activeAttacker, $rng, $result)) {
-            $this->applyResidual($activeAttacker, $result);
-            $state['rng_state'] = $rng->currentState();
-            $state['turn']++;
-            $state['next_actor_id'] = $opponentUserId;
-
-            return [$state, $result, false, null];
+        if ($attackerHp <= 0 && ! $this->hasHealthySwapTarget($actorSide)) {
+            throw new InvalidArgumentException('All of your monsters have fainted.');
         }
 
         if ($action['type'] === 'swap') {
@@ -81,9 +72,29 @@ class BattleEngine
                 'type' => 'swap',
                 'active_instance_id' => $action['monster_instance_id'],
             ];
+
+            $activeAttacker = & $actorSide['monsters'][$actorSide['active_index']];
         }
 
         if ($action['type'] === 'move') {
+            if ($this->isAsleep($activeAttacker, $result)) {
+                $this->applyResidual($activeAttacker, $result);
+                $state['rng_state'] = $rng->currentState();
+                $state['turn']++;
+                $state['next_actor_id'] = $opponentUserId;
+
+                return [$state, $result, false, null];
+            }
+
+            if ($this->isShockedAndImmobilized($activeAttacker, $rng, $result)) {
+                $this->applyResidual($activeAttacker, $result);
+                $state['rng_state'] = $rng->currentState();
+                $state['turn']++;
+                $state['next_actor_id'] = $opponentUserId;
+
+                return [$state, $result, false, null];
+            }
+
             $move = $this->findMoveBySlot($activeAttacker, (int) $action['slot']);
             $damage = $this->calculateDamage($rng, $move, $activeAttacker, $activeDefender, $multipliers);
             $activeDefender['current_hp'] = max(0, $activeDefender['current_hp'] - $damage);
@@ -266,6 +277,23 @@ class BattleEngine
             ];
 
             return true;
+        }
+
+        return false;
+    }
+
+    private function hasHealthySwapTarget(array $participant): bool
+    {
+        $activeIndex = $participant['active_index'] ?? 0;
+
+        foreach ($participant['monsters'] ?? [] as $index => $monster) {
+            if ($index === $activeIndex) {
+                continue;
+            }
+
+            if (($monster['current_hp'] ?? 0) > 0) {
+                return true;
+            }
         }
 
         return false;
