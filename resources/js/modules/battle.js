@@ -8,6 +8,24 @@ const hpPercent = (monster) => {
     return Math.max(0, Math.min(100, Math.floor(((monster.current_hp || 0) / max) * 100)));
 };
 
+const resolveMonsterDisplay = (monster, role = 'you') => {
+    const placeholder = Boolean(monster?.is_placeholder) && role === 'opponent';
+    const fainted = monster?.is_fainted ?? ((monster?.current_hp || 0) <= 0);
+    const name = placeholder ? (fainted ? 'Fainted monster' : 'Unknown monster') : monster?.name || 'Unknown';
+    const hpText = placeholder
+        ? fainted
+            ? 'Fainted'
+            : 'Ready'
+        : `HP ${monster?.current_hp ?? 0}${monster?.max_hp != null ? ` / ${monster.max_hp}` : ''}`;
+
+    return {
+        placeholder,
+        fainted,
+        name,
+        hpText,
+    };
+};
+
 const formatTypes = (monster) => {
     const types = monster?.type_names || [];
 
@@ -30,6 +48,14 @@ const renderSide = (side, role) => {
     const labelClass = role === 'you' ? 'text-slate-300' : 'text-gray-600';
     const bgBar = role === 'you' ? 'bg-emerald-400' : 'bg-rose-400';
     const barTrack = role === 'you' ? 'bg-slate-700' : 'bg-gray-200';
+    const benchLabels = bench
+        .map((monster) => {
+            const { name, hpText, fainted, placeholder } = resolveMonsterDisplay(monster, role);
+            const displayText = placeholder && role === 'opponent' ? `${name} (${hpText})` : `${monster?.name || name} (${hpText})`;
+
+            return `<span class="px-2 py-1 rounded-full ${role === 'you' ? 'bg-slate-800 border border-slate-700' : 'bg-gray-200 border border-gray-300'} ${fainted ? 'line-through opacity-70' : ''}">${escapeHtml(displayText)}</span>`;
+        })
+        .join('');
 
     return `
         <div class="flex items-center justify-between">
@@ -46,9 +72,7 @@ const renderSide = (side, role) => {
             </div>
         </div>
         <div class="mt-3 flex flex-wrap gap-2 text-xs" data-bench-list="${role}">
-            ${bench
-                .map((monster) => `<span class="px-2 py-1 rounded-full ${role === 'you' ? 'bg-slate-800 border border-slate-700' : 'bg-gray-200 border border-gray-300'}">${escapeHtml(monster.name)} (HP ${monster.current_hp})</span>`)
-                .join('')}
+            ${benchLabels}
         </div>
     `;
 };
@@ -82,11 +106,12 @@ const renderTeamList = (monsters = [], activeId = null, role = 'you') => {
     return monsters
         .map((monster) => {
             const isActive = monster.id === activeId;
-            const fainted = (monster.current_hp || 0) <= 0;
+            const { name, hpText, fainted, placeholder } = resolveMonsterDisplay(monster, role);
             const badge = isActive
                 ? '<span class="ml-2 text-emerald-300 text-xs bg-emerald-900/40 px-2 py-0.5 rounded-full">Active</span>'
                 : '';
-            const hpText = `HP ${monster.current_hp} / ${monster.max_hp}`;
+            const levelText = placeholder ? 'Lv ?' : `Lv ${monster.level ?? '?'}`;
+            const displayName = placeholder && role === 'opponent' ? name : monster.name || name;
 
             return `
                 <div class="flex items-center justify-between rounded px-3 py-2 ${
@@ -96,13 +121,13 @@ const renderTeamList = (monsters = [], activeId = null, role = 'you') => {
                             : 'ring-2 ring-rose-300 bg-white'
                         : role === 'you'
                           ? 'bg-slate-800/40'
-                          : 'bg-gray-100'
+                            : 'bg-gray-100'
                 }">
                     <div class="flex items-center">
-                        <span class="${fainted ? 'line-through opacity-70' : ''}">${escapeHtml(monster.name)} (Lv ${monster.level})</span>
+                        <span class="${fainted ? 'line-through opacity-70' : ''}">${escapeHtml(displayName)} (${escapeHtml(levelText)})</span>
                         ${badge}
                     </div>
-                    <span class="${role === 'you' ? 'text-slate-200' : 'text-gray-700'}">${hpText}</span>
+                    <span class="${role === 'you' ? 'text-slate-200' : 'text-gray-700'}">${escapeHtml(hpText)}</span>
                 </div>
             `;
         })

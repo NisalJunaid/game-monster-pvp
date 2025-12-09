@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Domain\Battle\BattleEngine;
+use App\Domain\Battle\BattleStateRedactor;
 use App\Domain\Pvp\PvpRankingService;
 use App\Events\BattleUpdated;
 use App\Http\Controllers\Controller;
@@ -25,10 +26,11 @@ class BattleController extends Controller
         $this->assertParticipant($request, $battle);
 
         $battle->load(['turns', 'player1', 'player2', 'winner']);
+        $state = BattleStateRedactor::forViewer($battle->meta_json, $request->user()->id);
 
         return view('battles.show', [
             'battle' => $battle,
-            'state' => $battle->meta_json,
+            'state' => $state,
         ]);
     }
 
@@ -37,7 +39,7 @@ class BattleController extends Controller
         $viewer = $this->assertParticipant($request, $battle);
 
         $battle->load(['player1', 'player2', 'winner']);
-        $state = $battle->meta_json;
+        $state = BattleStateRedactor::forViewer($battle->meta_json, $viewer->id);
 
         return response()->json([
             'battle' => [

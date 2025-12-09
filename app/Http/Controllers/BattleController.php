@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Battle\BattleEngine;
+use App\Domain\Battle\BattleStateRedactor;
 use App\Domain\Pvp\PvpRankingService;
 use App\Http\Requests\BattleActionRequest;
 use App\Http\Requests\ChallengeBattleRequest;
@@ -11,6 +12,7 @@ use App\Models\BattleTurn;
 use App\Models\MonsterInstance;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -48,7 +50,7 @@ class BattleController extends Controller
             ]);
         });
 
-        return response()->json(['data' => $this->serializeBattle($battle)], Response::HTTP_CREATED);
+        return response()->json(['data' => $this->serializeBattle($battle, $challenger->id)], Response::HTTP_CREATED);
     }
 
     public function act(BattleActionRequest $request, Battle $battle): JsonResponse
@@ -95,16 +97,16 @@ class BattleController extends Controller
         }
 
         return response()->json([
-            'data' => $this->serializeBattle($battle->fresh(['turns'])),
+            'data' => $this->serializeBattle($battle->fresh(['turns']), $actor->id),
             'turn' => $result,
         ]);
     }
 
-    public function show(Battle $battle): JsonResponse
+    public function show(Request $request, Battle $battle): JsonResponse
     {
         $battle->load('turns');
 
-        return response()->json(['data' => $this->serializeBattle($battle)]);
+        return response()->json(['data' => $this->serializeBattle($battle, $request->user()?->id)]);
     }
 
     private function loadParty(int $userId, array $partyIds)
@@ -122,8 +124,14 @@ class BattleController extends Controller
         return $party;
     }
 
-    private function serializeBattle(Battle $battle): array
+    private function serializeBattle(Battle $battle, ?int $viewerId = null): array
     {
+        $meta = $battle->meta_json;
+
+        if ($viewerId !== null) {
+            $meta = BattleStateRedactor::forViewer($meta, $viewerId);
+        }
+
         return [
             'id' => $battle->id,
             'status' => $battle->status,
@@ -133,7 +141,7 @@ class BattleController extends Controller
             'winner_user_id' => $battle->winner_user_id,
             'started_at' => $battle->started_at,
             'ended_at' => $battle->ended_at,
-            'meta' => $battle->meta_json,
+            'meta' => $meta,
             'turns' => $battle->turns->map(function (BattleTurn $turn) {
                 return [
                     'turn_number' => $turn->turn_number,

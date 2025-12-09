@@ -16,19 +16,24 @@
     $renderTeamList = function (array $monsters, ?int $activeId, bool $isYou = false) {
         return collect($monsters)->map(function (array $monster) use ($activeId, $isYou) {
             $isActive = ($monster['id'] ?? null) === $activeId;
-            $name = e($monster['name'] ?? 'Unknown');
-            $level = e($monster['level'] ?? '?');
-            $hpText = e(($monster['current_hp'] ?? 0).' / '.($monster['max_hp'] ?? 0));
+            $placeholder = ($monster['is_placeholder'] ?? false) && ! $isYou;
+            $isFainted = $monster['is_fainted'] ?? (($monster['current_hp'] ?? 0) <= 0);
+            $name = $placeholder
+                ? ($isFainted ? 'Fainted monster' : 'Unknown monster')
+                : e($monster['name'] ?? 'Unknown');
+            $level = $placeholder ? 'Lv ?' : 'Lv '.e($monster['level'] ?? '?');
+            $hpText = $placeholder
+                ? ($isFainted ? 'Fainted' : 'Ready')
+                : 'HP '.e(($monster['current_hp'] ?? 0).' / '.($monster['max_hp'] ?? 0));
             $badge = $isActive ? '<span class="ml-2 text-emerald-300 text-xs bg-emerald-900/40 px-2 py-0.5 rounded-full">Active</span>' : '';
-            $isFainted = ($monster['current_hp'] ?? 0) <= 0;
             $textColor = $isYou ? 'text-slate-200' : 'text-gray-700';
             $baseClass = $isActive
                 ? ($isYou ? 'ring-2 ring-emerald-400 bg-slate-800/60' : 'ring-2 ring-rose-300 bg-white')
                 : ($isYou ? 'bg-slate-800/40' : 'bg-gray-100');
 
             return "<div class=\"flex items-center justify-between rounded px-3 py-2 {$baseClass}\">"
-                ."<div class=\"flex items-center\"><span class=\"".($isFainted ? 'line-through opacity-70' : '')."\">{$name} (Lv {$level})</span>{$badge}</div>"
-                ."<span class=\"{$textColor}\">HP {$hpText}</span>"
+                ."<div class=\"flex items-center\"><span class=\"".($isFainted ? 'line-through opacity-70' : '')."\">{$name} ({$level})</span>{$badge}</div>"
+                ."<span class=\"{$textColor}\">{$hpText}</span>"
                 .'</div>';
         })->implode('');
     };
