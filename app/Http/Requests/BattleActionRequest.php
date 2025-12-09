@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 
 class BattleActionRequest extends FormRequest
@@ -49,7 +50,19 @@ class BattleActionRequest extends FormRequest
         return [
             'type' => ['required', Rule::in(['move', 'swap'])],
             'slot' => ['required_if:type,move', 'integer', 'min:1', 'max:4'],
-            'monster_instance_id' => ['required_if:type,swap', 'integer', 'exists:monster_instances,id'],
+            'monster_instance_id' => [
+                'required_if:type,swap',
+                'integer',
+                function (string $attribute, mixed $value, $fail) {
+                    $battle = $this->route('battle');
+                    $participant = $battle?->meta_json['participants'][$this->user()->id] ?? null;
+                    $monsters = new Collection($participant['monsters'] ?? []);
+
+                    if (! $monsters->contains(fn (array $monster) => ($monster['id'] ?? null) === (int) $value)) {
+                        $fail('The selected monster is not part of this battle.');
+                    }
+                },
+            ],
         ];
     }
 }
