@@ -14,6 +14,7 @@ use App\Models\ZoneSpawnEntry;
 use App\Support\RedisRateLimiter;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 
 class EncounterService
@@ -267,9 +268,16 @@ class EncounterService
 
     private function broadcastEncounters(User $user): void
     {
-        $tickets = $this->activeTickets($user);
+        try {
+            $tickets = $this->activeTickets($user);
 
-        broadcast(new WildEncountersUpdated($user->id, $tickets));
+            broadcast(new WildEncountersUpdated($user->id, $tickets));
+        } catch (\Throwable $exception) {
+            Log::warning('encounters.broadcast_failed', [
+                'user_id' => $user->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function onCooldown(User $user, Zone $zone): bool
