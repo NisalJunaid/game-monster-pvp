@@ -13,16 +13,7 @@ use InvalidArgumentException;
 
 class BattleEngine
 {
-    private array $typeChart;
-
-    public function __construct()
-    {
-        $this->typeChart = TypeEffectiveness::query()
-            ->get()
-            ->groupBy('attack_type_id')
-            ->map(fn (Collection $group) => $group->keyBy('defend_type_id')->map->multiplier)
-            ->toArray();
-    }
+    private array $typeChart = [];
 
     public function initialize(User $player1, User $player2, Collection $player1Party, Collection $player2Party, int $seed): array
     {
@@ -356,11 +347,26 @@ class BattleEngine
 
     private function typeMultiplier(int $attackTypeId, array $defenderTypes): float
     {
+        $this->ensureTypeChartLoaded();
+
         return array_reduce($defenderTypes, function (float $carry, int $defendTypeId) use ($attackTypeId) {
             $multiplier = Arr::get($this->typeChart, $attackTypeId.'.'.$defendTypeId, 1.0);
 
             return $carry * $multiplier;
         }, 1.0);
+    }
+
+    private function ensureTypeChartLoaded(): void
+    {
+        if ($this->typeChart !== []) {
+            return;
+        }
+
+        $this->typeChart = TypeEffectiveness::query()
+            ->get()
+            ->groupBy('attack_type_id')
+            ->map(fn (Collection $group) => $group->keyBy('defend_type_id')->map->multiplier)
+            ->toArray();
     }
 
     private function applyResidual(array &$monster, array &$result): void

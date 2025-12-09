@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\MonsterInstance;
 use App\Models\MonsterSpecies;
 use App\Models\Move;
+use App\Models\Battle;
 use App\Models\User;
 use Database\Seeders\MonsterSpeciesSeeder;
 use Database\Seeders\MoveSeeder;
@@ -123,6 +124,43 @@ class MonsterBattleTest extends TestCase
         }
 
         $this->fail('Battle did not complete within expected number of turns');
+    }
+
+    public function test_forced_swap_without_instance_id_selects_first_healthy_monster(): void
+    {
+        [$player, $opponent, $tokenPlayer, $tokenOpponent] = $this->buildPlayers();
+
+        $reservePlayerMonster = $this->spawnMonster($player, 'Water', ['Water Jet']);
+        $this->spawnMonster($opponent, 'Fire', ['Ember']);
+
+        $battleResponse = $this->withToken($tokenPlayer)->postJson('/api/battles/challenge', [
+            'opponent_user_id' => $opponent->id,
+            'player_party' => MonsterInstance::where('user_id', $player->id)->pluck('id')->all(),
+            'opponent_party' => MonsterInstance::where('user_id', $opponent->id)->pluck('id')->all(),
+            'seed' => 2024,
+        ]);
+
+        $battleResponse->assertCreated();
+
+        $battleId = $battleResponse->json('data.id');
+        $battle = Battle::findOrFail($battleId);
+        $state = $battle->meta_json;
+
+        $state['participants'][$player->id]['monsters'][0]['current_hp'] = 0;
+        $state['next_actor_id'] = $player->id;
+
+        $battle->update(['meta_json' => $state]);
+
+        $response = $this->withToken($tokenPlayer)->postJson("/api/battles/{$battleId}/act", ['type' => 'swap']);
+        $response->assertOk();
+
+        $updatedState = $response->json('data.meta');
+        $activeIndex = $updatedState['participants'][$player->id]['active_index'];
+        $activeId = $updatedState['participants'][$player->id]['monsters'][$activeIndex]['id'];
+        $swapEvent = collect($response->json('turn.events'))->firstWhere('type', 'swap');
+
+        $this->assertSame($reservePlayerMonster->id, $activeId);
+        $this->assertEquals($reservePlayerMonster->id, $swapEvent['active_instance_id']);
     }
 
     private function buildPlayers(string $playerType = 'Water', string $opponentType = 'Fire'): array
